@@ -20,7 +20,7 @@ struct Touch {
     float y = 0.0f;
 };
 
-// Whether the screen is there, and its size in pixels.
+// Whether the screen is there.
 bool Active();
 
 // Whether the player wants the interface on this screen rather than over the
@@ -28,8 +28,6 @@ bool Active();
 // there. On at start.
 bool InterfaceBelow();
 void ToggleInterface();
-int Width();
-int Height();
 
 // What draws the screen's picture into the current render target, `w` by `h`
 // pixels, and says whether it drew one: with none, the screen is left black

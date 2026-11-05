@@ -81,8 +81,7 @@ bool Renderer::ZoomBy(float factor, float x, float y, bool at_once) {
     if (now - zoom_asked_ms > kZoomPushMs) zoom_push = 1.0f;
     zoom_asked_ms = now;
     // Resting on a magnet, a held zoom builds up its push until it is enough
-    // to leave.
-    // Once it is, the zoom goes on from the magnet by what the push has gone
+    // to leave; it then goes on from the magnet by what the push has gone
     // past that, so that it leaves without a jump.
     if (at_once && ZoomMagnet(from)) {
         zoom_push *= factor;

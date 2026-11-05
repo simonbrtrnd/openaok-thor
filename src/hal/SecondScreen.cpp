@@ -124,9 +124,6 @@ bool Active() {
     return shared.window != nullptr;
 }
 
-int Width() { return g.width; }
-int Height() { return g.height; }
-
 void SetPainter(Painter painter) {
     g.painter = std::move(painter);
     g.due = true;
@@ -159,8 +156,6 @@ void TakeTouches(std::vector<Touch>& out) {
 #else
 
 bool Active() { return false; }
-int Width() { return 0; }
-int Height() { return 0; }
 void SetPainter(Painter) {}
 void Invalidate() {}
 void Present(SDL_Renderer*) {}

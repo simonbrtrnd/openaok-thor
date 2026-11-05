@@ -33,10 +33,10 @@ namespace HAL::Pad {
 //   X                   pause                              F3
 //   Y                   Escape
 //   LB, held            Shift
-//   RB                  the next idle villager             .
+//   RB                  the Town Center                    H
 //   LT, RT              zoom out and in, the further the faster
 //   D-pad up, down      faster, slower                     keypad + and -
-//   D-pad left          the Town Center                    H
+//   D-pad left          the next idle villager             .
 //   D-pad right         the next idle military unit        ,
 //   left stick, pushed  the selected unit                  Space
 //   right stick, pushed the last notification              Home

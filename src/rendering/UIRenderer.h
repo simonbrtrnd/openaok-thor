@@ -219,9 +219,7 @@ public:
         enum class Kind { None, Command, BarButton, MinimapButton, Minimap };
         Kind kind = Kind::None;
         int index = -1;
-        bool operator==(const SecondScreenTarget& other) const {
-            return kind == other.kind && index == other.index;
-        }
+        bool operator==(const SecondScreenTarget&) const = default;
     };
     static SecondScreenTarget SecondScreenTargetAt(int x, int y);
     // The finger on the second screen, as input follows it: what it is on,

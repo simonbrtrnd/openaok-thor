@@ -51,6 +51,7 @@
 #include "ecs/components/RallyPoint.h"
 #include "ecs/VillagerJobs.h"
 #include "hal/GraphicCache.h"
+#include "hal/SecondScreen.h"
 #include "hal/Window.h"
 
 #include <algorithm>
@@ -774,6 +775,7 @@ void UIRenderer::SetWorldHint(int string_id) { HudState().world_hint = string_id
 void UIRenderer::ToggleClock() { HudState().clock = !HudState().clock; }
 // The world between the bar and the panel, in the frame, at their sizes.
 SDL_Rect UIRenderer::ViewRect(int win_w, int win_h) {
+    if (OnSecondScreen()) return SDL_Rect{0, 0, win_w, win_h};
     const HudSpace top = TopSpace(win_w, win_h);
     const HudSpace panel = PanelSpace(win_w, win_h);
     const int y = static_cast<int>(std::lround(Lay(top.w).top_bar_h * top.scale));
@@ -800,13 +802,15 @@ UIRenderer::HudSpace UIRenderer::PanelSpace(int win_w, int win_h) {
     return SpaceFor(win_w, win_h, Core::Profile::Current().panel_size, true);
 }
 
+bool UIRenderer::OnSecondScreen() { return HAL::SecondScreen::Active(); }
+
 int UIRenderer::TextPercent() {
     return std::clamp(Core::Profile::Current().text_size, Core::Profile::kInterfaceSizeLeast,
                       Core::Profile::kInterfaceSizeMost);
 }
 
 bool UIRenderer::OverInterface(int win_w, int win_h, int x, int y) {
-    if (x < 0 || y < 0 || x >= win_w || y >= win_h) return false;
+    if (x < 0 || y < 0 || x >= win_w || y >= win_h || OnSecondScreen()) return false;
     const int split = HudSplit(LayoutForHeight(win_h));
     const HudSpace top = TopSpace(win_w, win_h);
     int px = 0, py = 0;
@@ -2582,8 +2586,11 @@ std::string UIRenderer::CommandHelp(ECS::Simulation& sim, const Command& command
 SDL_Rect UIRenderer::HelpBox(int lines, int win_w, int win_h) {
     const HudSpace panel = PanelSpace(win_w, win_h);
     const HudLayout& layout = Lay(panel.w);
-    const int bottom =
-        static_cast<int>(std::lround(panel.FrameY(static_cast<float>(layout.help.y + layout.help.h))));
+    // With no panel, the frame's bottom as far below as the box is from its
+    // left edge.
+    const int bottom = OnSecondScreen()
+        ? win_h - static_cast<int>(std::lround(layout.help.x * panel.scale))
+        : static_cast<int>(std::lround(panel.FrameY(static_cast<float>(layout.help.y + layout.help.h))));
     const int high = lines * static_cast<int>(std::lround(kHelpLinePitch * panel.scale)) +
                      2 * static_cast<int>(std::lround(kHelpInsetY * panel.scale));
     return {static_cast<int>(std::lround(layout.help.x * panel.scale)), bottom - high,
@@ -2606,13 +2613,14 @@ void UIRenderer::DrawHelpText(ECS::Simulation& sim, SDL_Renderer* sdl_r, int win
     // right-click would do in the world.
     std::string text;
     Command commands[kCommandSlots];
-    const int n = BuildCommands(sim, panel.w, win_h, commands, kCommandSlots);
+    const bool buttons = !OnSecondScreen();
+    const int n = buttons ? BuildCommands(sim, panel.w, win_h, commands, kCommandSlots) : 0;
     if (const Command* hovered = HoveredCommand(commands, n, mx, my)) {
         text = CommandHelp(sim, *hovered);
-    } else if (const int bar = BarButtonAt(top.w, tx, ty); bar >= 0) {
+    } else if (const int bar = buttons ? BarButtonAt(top.w, tx, ty) : -1; bar >= 0) {
         static const int kBarHelp[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
         text = Core::Strings::Get(kBarHelp[bar]);
-    } else if (const int mm = MinimapButtonAt(panel.w, mx, my); mm >= 0) {
+    } else if (const int mm = buttons ? MinimapButtonAt(panel.w, mx, my) : -1; mm >= 0) {
         switch (mm) {
         case kSignalAllies: text = Core::Strings::Get(4940); break;
         case kIdleVillager: text = Core::Strings::Get(41108); break;
@@ -2740,6 +2748,10 @@ void DrawPart(SDL_Renderer* sdl_r, const UIRenderer::HudSpace& space, int win_w,
 void UIRenderer::DrawInterface(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
                                int win_w, int win_h) {
     SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    if (OnSecondScreen()) {
+        DrawHelpText(sim, sdl_r, win_w, win_h);
+        return;
+    }
     const HudSpace panel = PanelSpace(win_w, win_h);
     DrawPart(sdl_r, panel, win_w, [&] {
         DrawArtPart(sdl_r, sim, panel.w, win_h, false);
@@ -2792,18 +2804,31 @@ constexpr int kSecondGridInset = 8;
 constexpr int kSecondButtonArt = 38;
 constexpr int kSecondButtonScale = 4;
 constexpr int kSecondGridPitch = kSecondButtonArt * kSecondButtonScale;
-// The top bar's buttons, then the mini-map's, as tiles two by two in the
-// right column, and which button each tile is.
-constexpr SDL_Point kSecondBarTiles = {808, 159};
-constexpr SDL_Point kSecondMinimapTiles = {808, 806};
-constexpr int kSecondTileW = 200;
-constexpr int kSecondBarTileH = 194;
-constexpr int kSecondMinimapTileH = 114;
+// Every top bar and mini-map button, as tiles in the right column: six named,
+// two by three, above the mini-map, and six pictures, three by two, below it.
+// The combat and economic mini-maps' buttons go back to the normal one when
+// pressed again, so the normal one needs no tile of its own.
+struct SecondTileGroup {
+    SDL_Rect area;
+    int columns;
+    int rows;
+};
+constexpr SecondTileGroup kSecondBarTiles = {{808, 159, 416, 404}, 2, 3};
+constexpr SecondTileGroup kSecondMinimapTiles = {{808, 806, 416, 245}, 3, 2};
 constexpr int kSecondGap = 16;
-constexpr int kSecondBarTile[4] = {kObjectives, kTechTree, kDiplomacy, kGameMenu};
-constexpr int kSecondMinimapTile[4] = {kAdvancedCommands, kStatistics, kEconomicMode, kSignalAllies};
-// The help strings the top bar's buttons are named by, in their order.
+using SecondKind = UIRenderer::SecondScreenTarget::Kind;
+constexpr UIRenderer::SecondScreenTarget kSecondBarTile[6] = {
+    {SecondKind::BarButton, kObjectives}, {SecondKind::BarButton, kTechTree},
+    {SecondKind::BarButton, kChat}, {SecondKind::BarButton, kDiplomacy},
+    {SecondKind::BarButton, kGameMenu}, {SecondKind::MinimapButton, kIdleVillager}};
+constexpr UIRenderer::SecondScreenTarget kSecondMinimapTile[6] = {
+    {SecondKind::MinimapButton, kAdvancedCommands}, {SecondKind::MinimapButton, kStatistics},
+    {SecondKind::MinimapButton, kHelpToggle}, {SecondKind::MinimapButton, kCombatMode},
+    {SecondKind::MinimapButton, kEconomicMode}, {SecondKind::MinimapButton, kSignalAllies}};
+// The help strings the named tiles are named by: the top bar's buttons, in
+// their order, and the idle villager's.
 constexpr int kBarHelpString[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
+constexpr int kIdleVillagerHelp = 41108;
 
 // The 1024x768 interface, drawn for the second screen to take its parts from.
 SDL_Texture* g_second_hud = nullptr;
@@ -2816,9 +2841,11 @@ SDL_Rect SecondCell(int slot) {
                     kSecondGridPitch, kSecondGridPitch};
 }
 
-SDL_Rect SecondTile(SDL_Point origin, int tile_h, int i) {
-    return SDL_Rect{origin.x + (i % 2) * (kSecondTileW + kSecondGap),
-                    origin.y + (i / 2) * (tile_h + kSecondGap), kSecondTileW, tile_h};
+SDL_Rect SecondTile(const SecondTileGroup& group, int i) {
+    const int w = (group.area.w - (group.columns - 1) * kSecondGap) / group.columns;
+    const int h = (group.area.h - (group.rows - 1) * kSecondGap) / group.rows;
+    return SDL_Rect{group.area.x + (i % group.columns) * (w + kSecondGap),
+                    group.area.y + (i / group.columns) * (h + kSecondGap), w, h};
 }
 
 // A help string's bold title: "<b>Objectives<b> \n..." names the button
@@ -2949,32 +2976,41 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
         SDL_RenderCopy(sdl_r, g_second_hud, &from, &to);
     }
 
-    // The top bar's buttons, named, each name as large as its tile has room
-    // for, and the mini-map's, lit while on.
-    for (int i = 0; i < 4; ++i) {
-        const SDL_Rect r = SecondTile(kSecondBarTiles, kSecondBarTileH, i);
-        const int button = kSecondBarTile[i];
+    // The named tiles, each name as large as its tile has room for, and the
+    // mini-map's pictures, lit while on.
+    for (int i = 0; i < 6; ++i) {
+        const SDL_Rect r = SecondTile(kSecondBarTiles, i);
+        const SecondScreenTarget& tile = kSecondBarTile[i];
+        const bool bar = tile.kind == SecondKind::BarButton;
         SecondTileBox(sdl_r, r, false);
-        const std::string label = HelpTitle(kBarHelpString[button]);
+        const std::string label = HelpTitle(bar ? kBarHelpString[tile.index] : kIdleVillagerHelp);
         int font = Text::Scaled(Text::kGeorgia9B, kSecondLabelPercent);
         for (int percent = kSecondLabelPercent; percent > 100 && Text::Width(font, label) > r.w - 16;
              percent -= 25) {
             font = Text::Scaled(Text::kGeorgia9B, percent - 25);
         }
         // The button and its name, centred in the tile together.
-        constexpr int kIconW = 150, kIconH = 51, kSpace = 14;
-        const int top = r.y + (r.h - kIconH - kSpace - Text::Height(font)) / 2;
-        DrawIcon(sdl_r, kBarButtonSlp, kBarButtonFrame[button],
-                 SDL_Rect{r.x + (r.w - kIconW) / 2, top, kIconW, kIconH}, 1, 255);
+        constexpr int kSpace = 10;
+        const int icon_w = bar ? 150 : 52;
+        const int icon_h = bar ? 51 : 52;
+        const int top = r.y + (r.h - icon_h - kSpace - Text::Height(font)) / 2;
+        const SDL_Rect icon = {r.x + (r.w - icon_w) / 2, top, icon_w, icon_h};
+        if (bar) {
+            DrawIcon(sdl_r, kBarButtonSlp, kBarButtonFrame[tile.index], icon, 1, 255);
+        } else {
+            DrawIcon(sdl_r, minimap_slp, kMinimapButtonFrame[tile.index], icon, 1, 255);
+        }
         Text::DrawShadowed(sdl_r, font, r.x + (r.w - Text::Width(font, label)) / 2,
-                           top + kIconH + kSpace, label, kWhite, kBlack);
+                           top + icon_h + kSpace, label, kWhite, kBlack);
     }
     const Hud& hud = HudState();
-    for (int i = 0; i < 4; ++i) {
-        const SDL_Rect r = SecondTile(kSecondMinimapTiles, kSecondMinimapTileH, i);
-        const int button = kSecondMinimapTile[i];
+    for (int i = 0; i < 6; ++i) {
+        const SDL_Rect r = SecondTile(kSecondMinimapTiles, i);
+        const int button = kSecondMinimapTile[i].index;
         const bool lit = (button == kAdvancedCommands && hud.advanced) ||
                          (button == kStatistics && hud.statistics) ||
+                         (button == kHelpToggle && hud.help) ||
+                         (button == kCombatMode && hud.minimap_mode == 1) ||
                          (button == kEconomicMode && hud.minimap_mode == 2);
         SecondTileBox(sdl_r, r, lit);
         constexpr int kIcon = 96;
@@ -2997,13 +3033,9 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     for (int slot = 1; slot <= kCommandSlots; ++slot) {
         if (Inside(SecondCell(slot), x, y)) return SecondScreenTarget{Kind::Command, slot};
     }
-    for (int i = 0; i < 4; ++i) {
-        if (Inside(SecondTile(kSecondBarTiles, kSecondBarTileH, i), x, y)) {
-            return SecondScreenTarget{Kind::BarButton, kSecondBarTile[i]};
-        }
-        if (Inside(SecondTile(kSecondMinimapTiles, kSecondMinimapTileH, i), x, y)) {
-            return SecondScreenTarget{Kind::MinimapButton, kSecondMinimapTile[i]};
-        }
+    for (int i = 0; i < 6; ++i) {
+        if (Inside(SecondTile(kSecondBarTiles, i), x, y)) return kSecondBarTile[i];
+        if (Inside(SecondTile(kSecondMinimapTiles, i), x, y)) return kSecondMinimapTile[i];
     }
     if (Inside(kSecondMinimap, x, y)) return SecondScreenTarget{Kind::Minimap, -1};
     return SecondScreenTarget{};

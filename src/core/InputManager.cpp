@@ -200,10 +200,11 @@ void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& 
         Rendering::UIRenderer::RequestDialog(target.index);
         break;
     case Kind::MinimapButton:
-        // The economic mode's button turns it off again.
+        // The combat and economic modes' buttons turn them off again.
         if (target.index == Rendering::kSignalAllies) {
             pending_order = PendingOrder::Flare;
-        } else if (target.index == Rendering::kEconomicMode && Rendering::UIRenderer::MinimapMode() == 2) {
+        } else if ((target.index == Rendering::kCombatMode && Rendering::UIRenderer::MinimapMode() == 1) ||
+                   (target.index == Rendering::kEconomicMode && Rendering::UIRenderer::MinimapMode() == 2)) {
             Rendering::UIRenderer::ActivateMinimapButton(Rendering::kNormalMode);
         } else if (Rendering::UIRenderer::ActivateMinimapButton(target.index)) {
             NextIdleVillager(sim, renderer);
@@ -1515,14 +1516,16 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
             int tx = 0, ty = 0, px = 0, py = 0;
             top.ToSpace(mx, my, tx, ty);
             panel.ToSpace(mx, my, px, py);
+            // With the interface on a second screen, nothing here is a button.
+            const bool buttons = !Rendering::UIRenderer::OnSecondScreen();
 
             // The top bar's buttons, and those round the mini-map.
-            if (const int bar = Rendering::UIRenderer::BarButtonAt(top.w, tx, ty);
+            if (const int bar = buttons ? Rendering::UIRenderer::BarButtonAt(top.w, tx, ty) : -1;
                 bar >= 0) {
                 Rendering::UIRenderer::RequestDialog(bar);
                 return;
             }
-            if (const int mm = Rendering::UIRenderer::MinimapButtonAt(panel.w, px, py);
+            if (const int mm = buttons ? Rendering::UIRenderer::MinimapButtonAt(panel.w, px, py) : -1;
                 mm >= 0) {
                 if (mm == Rendering::kSignalAllies) {
                     pending_order = PendingOrder::Flare;
@@ -1537,8 +1540,8 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
             // narrows to every unit of its kind.
             {
                 Rendering::UIRenderer::SelectionCard cards[Rendering::UIRenderer::kMaxSelectionCards];
-                const int shown = Rendering::UIRenderer::BuildSelectionCards(
-                    sim, panel.w, last_win_h, cards, Rendering::UIRenderer::kMaxSelectionCards);
+                const int shown = buttons ? Rendering::UIRenderer::BuildSelectionCards(
+                    sim, panel.w, last_win_h, cards, Rendering::UIRenderer::kMaxSelectionCards) : 0;
                 // Topmost card first: a card overlaps the one to its right.
                 for (int i = 0; i < shown; ++i) {
                     const SDL_Rect& r = cards[i].rect;
@@ -1568,7 +1571,7 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
             // The minimap owns the click if the cursor is over its well. The
             // well and the projection both come from the renderer.
             const SDL_FRect well = Rendering::UIRenderer::MinimapRect(panel.w, last_win_h);
-            if (px >= well.x && px < well.x + well.w &&
+            if (buttons && px >= well.x && px < well.x + well.w &&
                 py >= well.y && py < well.y + well.h) {
                 // A flare can be pointed on the mini-map as well as the world.
                 float gx = 0.0f, gy = 0.0f;
@@ -1589,9 +1592,9 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
             // a full refund. Hit-tested against the very slots the panel drew.
             {
                 Rendering::UIRenderer::QueueSlot slots[Rendering::UIRenderer::kMaxQueueSlots];
-                const int shown = Rendering::UIRenderer::BuildQueueSlots(
+                const int shown = buttons ? Rendering::UIRenderer::BuildQueueSlots(
                     sim, panel.w, last_win_h, slots,
-                    Rendering::UIRenderer::kMaxQueueSlots);
+                    Rendering::UIRenderer::kMaxQueueSlots) : 0;
                 for (int i = 0; i < shown; ++i) {
                     const auto& r = slots[i].rect;
                     if (px < r.x || px >= r.x + r.w || py < r.y || py >= r.y + r.h) continue;
@@ -1607,9 +1610,9 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
 
             // Command buttons, hit-tested against the very list the panel drew.
             Rendering::UIRenderer::Command commands[Rendering::UIRenderer::kCommandSlots];
-            const int command_count = Rendering::UIRenderer::BuildCommands(
+            const int command_count = buttons ? Rendering::UIRenderer::BuildCommands(
                 sim, panel.w, last_win_h, commands,
-                Rendering::UIRenderer::kCommandSlots);
+                Rendering::UIRenderer::kCommandSlots) : 0;
             for (int i = 0; i < command_count; ++i) {
                 const auto& cmd = commands[i];
                 if (px < cmd.rect.x || px >= cmd.rect.x + cmd.rect.w) continue;
@@ -1708,7 +1711,8 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
                 float gx = 0.0f, gy = 0.0f;
                 int px = 0, py = 0;
                 panel.ToSpace(event.button.x, event.button.y, px, py);
-                if (px >= well.x && px < well.x + well.w && py >= well.y && py < well.y + well.h &&
+                if (!Rendering::UIRenderer::OnSecondScreen() &&
+                    px >= well.x && px < well.x + well.w && py >= well.y && py < well.y + well.h &&
                     Rendering::UIRenderer::MinimapUnproject(well, static_cast<float>(px),
                                                             static_cast<float>(py),
                                                             sim.GetGrid().GetWidth(),

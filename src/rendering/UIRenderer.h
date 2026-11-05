@@ -40,6 +40,10 @@ public:
     };
     static HudSpace TopSpace(int win_w, int win_h);
     static HudSpace PanelSpace(int win_w, int win_h);
+    // Whether the interface is on a second screen (hal/SecondScreen,
+    // DrawSecondScreen) rather than over the map: the frame is then all view,
+    // and nothing in it is a button.
+    static bool OnSecondScreen();
     // Whether a point of the frame is on either part of the interface.
     static bool OverInterface(int win_w, int win_h, int x, int y);
     // The Options' Text size, in percent: the text over the world.

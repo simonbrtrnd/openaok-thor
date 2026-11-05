@@ -43,6 +43,8 @@ namespace HAL::Pad {
 //   Start               the game menu                      F10
 //   Back                the interface over the map, or back on the second
 //                       screen (hal/SecondScreen)
+//   Back held, d-pad    the CRT look (hal/Crt): left and right its mode, up
+//                       and down its intensity
 //
 // The keys are the game's default hotkeys, pressed as though typed.
 

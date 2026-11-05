@@ -51,6 +51,7 @@
 #include "ecs/components/RallyPoint.h"
 #include "ecs/VillagerJobs.h"
 #include "hal/GraphicCache.h"
+#include "hal/Crt.h"
 #include "hal/SecondScreen.h"
 #include "hal/Window.h"
 
@@ -2860,12 +2861,31 @@ void DrawZoomReadout(const Renderer& renderer, SDL_Renderer* sdl_r, int win_w, i
                        colour, kBlack);
 }
 
+// The CRT look, a moment after the controller changes it (hal/Crt): its mode
+// and intensity, under the zoom's place.
+void DrawCrtReadout(SDL_Renderer* sdl_r, int win_w, int win_h) {
+    const Uint32 changed = HAL::Crt::ChangedMs();
+    if (changed == 0 || SDL_GetTicks() - changed > kZoomReadoutMs) return;
+    const int mode = HAL::Crt::CurrentMode();
+    char text[48];
+    if (mode == HAL::Crt::kOff) {
+        std::snprintf(text, sizeof(text), "CRT: %s", HAL::Crt::ModeName(mode));
+    } else {
+        std::snprintf(text, sizeof(text), "CRT: %s %d%%", HAL::Crt::ModeName(mode), HAL::Crt::Intensity());
+    }
+    const SDL_Rect view = UIRenderer::ViewRect(win_w, win_h);
+    const int font = Text::kBlackletter21B;
+    Text::DrawShadowed(sdl_r, font, view.x + (view.w - Text::Width(font, text)) / 2,
+                       view.y + 24 + Text::Height(font) + 8, text, kWhite, kBlack);
+}
+
 } // namespace
 
 void UIRenderer::DrawInterface(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
                                int win_w, int win_h) {
     SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
     DrawZoomReadout(renderer, sdl_r, win_w, win_h);
+    DrawCrtReadout(sdl_r, win_w, win_h);
     if (OnSecondScreen()) {
         DrawHelpText(sim, sdl_r, win_w, win_h);
         return;

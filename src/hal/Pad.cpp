@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "hal/Crt.h"
 #include "hal/Pointer.h"
 #include "hal/SecondScreen.h"
 #include "hal/TextInput.h"
@@ -63,6 +64,8 @@ struct State {
     float x = -1.0f;   // the pointer, window pixels; below zero until placed
     float y = -1.0f;
     bool zl = false;   // held: the right stick zooms
+    bool back_held = false;   // Android: Back is down
+    bool back_used = false;   // and the d-pad has been pressed with it
     Uint64 last = 0;   // SDL's performance counter at the last Update
 };
 State g;
@@ -218,10 +221,26 @@ bool Handle(const SDL_Event& event) {
         }
         return true;
     }
-    // Back puts the interface over the map, or back on the second screen
-    // (hal/SecondScreen), should that screen be no use.
+    // Back on its own puts the interface over the map, or back on the second
+    // screen (hal/SecondScreen), should that screen be no use, as it comes up.
+    // Held, the d-pad sets the CRT look (hal/Crt): left and right its mode, up
+    // and down its intensity.
     if (pad_button == SDL_CONTROLLER_BUTTON_BACK) {
-        if (pressed) SecondScreen::ToggleInterface();
+        if (!pressed && g.back_held && !g.back_used) SecondScreen::ToggleInterface();
+        g.back_held = pressed;
+        g.back_used = false;
+        return true;
+    }
+    if (g.back_held && pad_button >= SDL_CONTROLLER_BUTTON_DPAD_UP && pad_button <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
+        if (!pressed) return true;
+        switch (pad_button) {
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT: Crt::StepMode(-1); break;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: Crt::StepMode(1); break;
+        case SDL_CONTROLLER_BUTTON_DPAD_UP: Crt::StepIntensity(1); break;
+        default: Crt::StepIntensity(-1); break;
+        }
+        g.back_used = true;
+        SecondScreen::Invalidate();
         return true;
     }
     const SDL_Scancode pad_key = KeyOfGamepad(pad_button);

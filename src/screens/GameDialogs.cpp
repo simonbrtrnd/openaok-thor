@@ -1201,8 +1201,10 @@ bool HandleEvent(const SDL_Event& event, ECS::Simulation& sim) {
     if (e.type == SDL_KEYDOWN) {
         const SDL_Keycode key = e.key.keysym.sym;
         namespace HK = Core::Hotkeys;
+        // F10 is the menu's own key, not one of the table's: it opens the menu,
+        // and closes it again, as the controller's Start does both.
+        if (key == SDLK_F10 && s.dialog == Dialog::Menu) { Open(Dialog::None); return true; }
         if (s.dialog == Dialog::None) {
-            // F10 is the menu's own key, not one of the table's.
             if (key == SDLK_F10) { Open(Dialog::Menu); return true; }
             if (HK::Is(e.key, HK::kGameCommands, HK::kPause)) { TogglePause(); return true; }
             if (HK::Is(e.key, HK::kGameCommands, HK::kDiplomacy)) { Open(Dialog::Diplomacy); return true; }

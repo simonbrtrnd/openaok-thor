@@ -41,8 +41,7 @@ namespace HAL::Pad {
 //   left stick, pushed  the selected unit                  Space
 //   right stick, pushed the last notification              Home
 //   Start               the game menu                      F10
-//   Back                chat                               Enter
-//   L1 and Start        the interface over the map, or back on the second
+//   Back                the interface over the map, or back on the second
 //                       screen (hal/SecondScreen)
 //
 // The keys are the game's default hotkeys, pressed as though typed.

@@ -134,7 +134,6 @@ SDL_Scancode KeyOfGamepad(int button) {
     case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return SDL_SCANCODE_LSHIFT;
     case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return SDL_SCANCODE_PERIOD;
     case SDL_CONTROLLER_BUTTON_START: return SDL_SCANCODE_F10;
-    case SDL_CONTROLLER_BUTTON_BACK: return SDL_SCANCODE_RETURN;
     case SDL_CONTROLLER_BUTTON_LEFTSTICK: return SDL_SCANCODE_SPACE;
     case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return SDL_SCANCODE_HOME;
     case SDL_CONTROLLER_BUTTON_DPAD_UP: return SDL_SCANCODE_KP_PLUS;
@@ -220,11 +219,10 @@ bool Handle(const SDL_Event& event) {
         }
         return true;
     }
-    // L1 and Start together put the interface over the map, or back on the
-    // second screen (hal/SecondScreen), should that screen be no use.
-    if (pad_button == SDL_CONTROLLER_BUTTON_START && pressed && g.controller != nullptr &&
-        SDL_GameControllerGetButton(g.controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) {
-        SecondScreen::ToggleInterface();
+    // Back puts the interface over the map, or back on the second screen
+    // (hal/SecondScreen), should that screen be no use.
+    if (pad_button == SDL_CONTROLLER_BUTTON_BACK) {
+        if (pressed) SecondScreen::ToggleInterface();
         return true;
     }
     const SDL_Scancode pad_key = KeyOfGamepad(pad_button);

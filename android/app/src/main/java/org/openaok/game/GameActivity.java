@@ -24,6 +24,9 @@ import org.libsdl.app.SDLActivity;
  * than finding the last game's art in memory, made for a renderer since gone.
  *
  * The keyboard comes up on whichever screen was touched last (BottomScreen).
+ *
+ * The controller's own back key is Escape as well. SDL would take it for the
+ * same button as Select, which moves the interface between the screens.
  */
 public class GameActivity extends SDLActivity implements InputManager.InputDeviceListener {
     private static native void nativeMouseAttached(boolean attached);
@@ -46,6 +49,24 @@ public class GameActivity extends SDLActivity implements InputManager.InputDevic
                     onNativeKeyUp(KeyEvent.KEYCODE_BACK);
                 });
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        return backAsEscape(event) || super.dispatchKeyEvent(event);
+    }
+
+    /** The back key, from a controller or anywhere, handed to the engine as the back key it makes Escape. */
+    static boolean backAsEscape(KeyEvent event) {
+        if (event.getKeyCode() != KeyEvent.KEYCODE_BACK) {
+            return false;
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            onNativeKeyDown(KeyEvent.KEYCODE_BACK);
+        } else if (event.getAction() == KeyEvent.ACTION_UP) {
+            onNativeKeyUp(KeyEvent.KEYCODE_BACK);
+        }
+        return true;
     }
 
     @Override

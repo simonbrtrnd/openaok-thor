@@ -113,6 +113,9 @@ class BottomScreen implements SurfaceHolder.Callback, View.OnTouchListener, View
     /** The keys the game's own window takes, except those Android keeps (SDLActivity.dispatchKeyEvent). */
     @Override
     public boolean onKey(View view, int keyCode, KeyEvent event) {
+        if (GameActivity.backAsEscape(event)) {
+            return true;
+        }
         switch (keyCode) {
         case KeyEvent.KEYCODE_VOLUME_DOWN:
         case KeyEvent.KEYCODE_VOLUME_UP:

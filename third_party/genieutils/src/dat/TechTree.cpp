@@ -24,6 +24,8 @@
 
 namespace genie {
 
+TechTree::~TechTree() = default;
+
 //------------------------------------------------------------------------------
 void TechTree::setGameVersion(GameVersion gv)
 {

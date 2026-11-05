@@ -31,6 +31,8 @@ class ResearchConnection;
 class TechTree : public ISerializable
 {
 public:
+    ~TechTree() override;
+
     void setGameVersion(GameVersion gv) override;
 
     /// Number of total unit/tech groups

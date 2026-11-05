@@ -2845,7 +2845,7 @@ void DrawPart(SDL_Renderer* sdl_r, const UIRenderer::HudSpace& space, int win_w,
 namespace {
 
 // The zoom, a moment after it is asked to change: its percentage over the top
-// of the view, gold while it rests on one of its magnets.
+// of the view, bright yellow while it rests on one of its magnets.
 constexpr uint32_t kZoomReadoutMs = 1200;
 
 void DrawZoomReadout(const Renderer& renderer, SDL_Renderer* sdl_r, int win_w, int win_h) {
@@ -2855,7 +2855,7 @@ void DrawZoomReadout(const Renderer& renderer, SDL_Renderer* sdl_r, int win_w, i
     std::snprintf(text, sizeof(text), "%d%%", static_cast<int>(std::lround(zoom * 100.0f)));
     const SDL_Rect view = UIRenderer::ViewRect(win_w, win_h);
     const int font = Text::kBlackletter21B;
-    const SDL_Color colour = Renderer::ZoomMagnet(zoom) ? SDL_Color{236, 196, 92, 255} : kWhite;
+    const SDL_Color colour = Renderer::ZoomMagnet(zoom) ? SDL_Color{255, 255, 0, 255} : kWhite;
     Text::DrawShadowed(sdl_r, font, view.x + (view.w - Text::Width(font, text)) / 2, view.y + 24, text,
                        colour, kBlack);
 }

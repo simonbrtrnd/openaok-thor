@@ -211,6 +211,13 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     protected static SDLActivity mSingleton;
     protected static SDLSurface mSurface;
     protected static DummyEdit mTextEdit;
+    // OpenAoK: where the keyboard's editor goes instead of mLayout, when the
+    // host gives a layout of another window, such as a second screen's. The
+    // keyboard then comes up on that window's display.
+    public interface TextInputHost {
+        ViewGroup textInputLayout();
+    }
+    protected static TextInputHost mTextInputHost;
     protected static boolean mScreenKeyboardShown;
     protected static ViewGroup mLayout;
     protected static SDLClipboardHandler mClipboardHandler;
@@ -221,6 +228,12 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
     // This is what SDL runs in. It invokes SDL_main(), eventually
     protected static Thread mSDLThread;
+
+    // OpenAoK: SDL's handling of joystick and mouse motion, for another
+    // window to pass its events on to.
+    public static View.OnGenericMotionListener genericMotionListener() {
+        return getMotionListener();
+    }
 
     protected static SDLGenericMotionListener_API12 getMotionListener() {
         if (mMotionListener == null) {
@@ -812,6 +825,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     mScreenKeyboardShown = false;
 
                     mSurface.requestFocus();
+                    if (mTextEdit.getParent() != mLayout) {
+                        ((View) mTextEdit.getParent()).requestFocus();
+                    }
                 }
                 break;
             case COMMAND_SET_KEEP_SCREEN_ON:
@@ -1275,10 +1291,21 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             params.leftMargin = x;
             params.topMargin = y;
 
-            if (mTextEdit == null) {
-                mTextEdit = new DummyEdit(SDL.getContext());
+            ViewGroup layout = mTextInputHost != null ? mTextInputHost.textInputLayout() : null;
+            if (layout == null) {
+                layout = mLayout;
+            } else {
+                params = new RelativeLayout.LayoutParams(1, 1);
+            }
+            if (mTextEdit != null && mTextEdit.getParent() != layout) {
+                ((ViewGroup) mTextEdit.getParent()).removeView(mTextEdit);
+                mTextEdit = null;
+            }
 
-                mLayout.addView(mTextEdit, params);
+            if (mTextEdit == null) {
+                mTextEdit = new DummyEdit(layout.getContext());
+
+                layout.addView(mTextEdit, params);
             } else {
                 mTextEdit.setLayoutParams(params);
             }

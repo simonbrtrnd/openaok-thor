@@ -6,6 +6,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.window.OnBackInvokedDispatcher;
 
 import org.libsdl.app.SDLActivity;
@@ -21,6 +22,8 @@ import org.libsdl.app.SDLActivity;
  * caught here and handed to the engine as the back key. When the game ends,
  * the process ends with it, so the next start loads everything afresh rather
  * than finding the last game's art in memory, made for a renderer since gone.
+ *
+ * The keyboard comes up on whichever screen was touched last (BottomScreen).
  */
 public class GameActivity extends SDLActivity implements InputManager.InputDeviceListener {
     private static native void nativeMouseAttached(boolean attached);
@@ -35,6 +38,7 @@ public class GameActivity extends SDLActivity implements InputManager.InputDevic
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mTextInputHost = bottomScreen;
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, () -> {
@@ -42,6 +46,14 @@ public class GameActivity extends SDLActivity implements InputManager.InputDevic
                     onNativeKeyUp(KeyEvent.KEYCODE_BACK);
                 });
         }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            bottomScreen.touchedElsewhere();
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override

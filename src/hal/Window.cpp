@@ -1,5 +1,6 @@
 #include "Window.h"
 #include "GraphicCache.h"
+#include "Crt.h"
 #include "Pad.h"
 #include "SecondScreen.h"
 #include "TextInput.h"
@@ -181,7 +182,9 @@ void Window::Present() {
     // square and sharp; any other scale is filtered.
     const bool whole = dest.w % game_w == 0 && dest.h % game_h == 0;
     SDL_SetTextureScaleMode(frame, whole ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
-    SDL_RenderCopy(renderer, frame, nullptr, &dest);
+    if (!Crt::Present(renderer, frame, game_w, game_h, dest, out_h)) {
+        SDL_RenderCopy(renderer, frame, nullptr, &dest);
+    }
     SDL_RenderPresent(renderer);
     GraphicCache::Get().EndFrame();
     // The controller's pointer, and the system keyboard when a line is due

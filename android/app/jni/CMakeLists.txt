@@ -40,7 +40,7 @@ target_include_directories(main SYSTEM PRIVATE ${REPO}/third_party ${CMAKE_BINAR
 # The desktop build's warnings, but not as errors: this compiler is not the
 # one the code is kept warning-clean against.
 target_compile_options(main PRIVATE -O3 -Wall -Wextra -Wno-missing-designated-field-initializers)
-target_link_libraries(main PRIVATE SDL2 freetype android log m)
+target_link_libraries(main PRIVATE SDL2 freetype android log m GLESv2)
 # Link-time optimisation, as the desktop build has, where the NDK's toolchain
 # supports it.
 include(CheckIPOSupported)

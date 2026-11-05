@@ -24,7 +24,8 @@ namespace HAL::Pad {
 //   D-pad left, right   slower, faster                     keypad - and +
 //
 // On Android, a gamepad by SDL's standard layout (an Xbox controller's, as
-// the AYN Thor's own is seen):
+// the AYN Thor's own is seen; the Thor prints its letters Nintendo's way, A
+// and B, X and Y swapped):
 //
 //   left stick          the pointer
 //   right stick         the map
@@ -45,6 +46,9 @@ namespace HAL::Pad {
 //                       screen (hal/SecondScreen)
 //   Back held, d-pad    the CRT look (hal/Crt): left and right its mode, up
 //                       and down its intensity
+//   Back held, B A Y X  the control groups 1 to 4 (the Thor's A B X Y):
+//                       selected, looked at when pressed twice, and set with
+//                       L1 held                            1 to 4, Ctrl
 //
 // The keys are the game's default hotkeys, pressed as though typed.
 

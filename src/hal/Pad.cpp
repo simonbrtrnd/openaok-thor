@@ -65,6 +65,7 @@ struct State {
     float y = -1.0f;
     bool zl = false;   // held: the right stick zooms
     bool back_held = false;   // Android: Back is down
+    Uint32 chord = 0;         // face buttons pressed with it, by bit, their releases taken too
     bool back_used = false;   // and the d-pad has been pressed with it
     Uint64 last = 0;   // SDL's performance counter at the last Update
 };
@@ -85,6 +86,11 @@ int AndroidKey(SDL_Scancode key) {
     case SDL_SCANCODE_SPACE: return AKEYCODE_SPACE;
     case SDL_SCANCODE_KP_MINUS: return AKEYCODE_NUMPAD_SUBTRACT;
     case SDL_SCANCODE_KP_PLUS: return AKEYCODE_NUMPAD_ADD;
+    case SDL_SCANCODE_LCTRL: return AKEYCODE_CTRL_LEFT;
+    case SDL_SCANCODE_1: return AKEYCODE_1;
+    case SDL_SCANCODE_2: return AKEYCODE_2;
+    case SDL_SCANCODE_3: return AKEYCODE_3;
+    case SDL_SCANCODE_4: return AKEYCODE_4;
     default: return AKEYCODE_UNKNOWN;
     }
 }
@@ -143,6 +149,20 @@ SDL_Scancode KeyOfGamepad(int button) {
     case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return SDL_SCANCODE_PERIOD;
     case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return SDL_SCANCODE_COMMA;
     default: return SDL_SCANCODE_UNKNOWN;
+    }
+}
+
+// The control group a face button picks with Back held, 1 to 4, or 0: by
+// the letters the AYN Thor prints on them, Nintendo's way round (B at the
+// bottom, A on the right, Y on the left, X at the top), A 1, B 2, X 3, Y 4.
+// SDL names the buttons by their places, as an Xbox controller's.
+int GroupOf(int button) {
+    switch (button) {
+    case SDL_CONTROLLER_BUTTON_B: return 1;
+    case SDL_CONTROLLER_BUTTON_A: return 2;
+    case SDL_CONTROLLER_BUTTON_Y: return 3;
+    case SDL_CONTROLLER_BUTTON_X: return 4;
+    default: return 0;
     }
 }
 
@@ -212,6 +232,29 @@ bool Handle(const SDL_Event& event) {
     if (event.type != SDL_CONTROLLERBUTTONDOWN && event.type != SDL_CONTROLLERBUTTONUP) return false;
     const bool pressed = event.type == SDL_CONTROLLERBUTTONDOWN;
     const int pad_button = event.cbutton.button;
+    // Held, Back makes A, B, X and Y the control groups 1 to 4, as their
+    // number keys: on their own they select theirs, and twice quickly look at
+    // it; with L1 held, Ctrl as well, they put the selection in it, with a
+    // buzz.
+    const Uint32 bit = 1u << pad_button;
+    if (const int group = GroupOf(pad_button); group > 0 && (pressed ? g.back_held : (g.chord & bit) != 0)) {
+        if (pressed) {
+            const SDL_Scancode digit = static_cast<SDL_Scancode>(SDL_SCANCODE_1 + group - 1);
+            const bool assign = SDL_GameControllerGetButton(g.controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0;
+            if (assign) Key(SDL_SCANCODE_LCTRL, true);
+            Key(digit, true);
+            Key(digit, false);
+            if (assign) {
+                Key(SDL_SCANCODE_LCTRL, false);
+                Rumble();
+            }
+            g.chord |= bit;
+            g.back_used = true;
+        } else {
+            g.chord &= ~bit;
+        }
+        return true;
+    }
     if (pad_button == SDL_CONTROLLER_BUTTON_A || pad_button == SDL_CONTROLLER_BUTTON_B) {
         const Uint8 mouse = pad_button == SDL_CONTROLLER_BUTTON_A ? SDL_BUTTON_LEFT : SDL_BUTTON_RIGHT;
         if (pressed) {

@@ -1,5 +1,7 @@
 #include "hal/SecondScreen.h"
 
+#include "hal/Crt.h"
+
 #ifdef __ANDROID__
 #include <android/input.h>
 #include <android/native_window_jni.h>
@@ -47,6 +49,7 @@ Shared shared;
 struct State {
     Painter painter;
     SDL_Texture* texture = nullptr;
+    SDL_Texture* crt = nullptr;   // the picture through the CRT shader (hal/Crt)
     int width = 0;
     int height = 0;
     std::vector<Uint32> pixels;
@@ -76,12 +79,17 @@ ANativeWindow* AcquireWindow(int& width, int& height, bool& is_new, bool& touche
 
 bool Resize(SDL_Renderer* renderer, int width, int height) {
     if (g.texture != nullptr && width == g.width && height == g.height) return true;
-    if (g.texture != nullptr) SDL_DestroyTexture(g.texture);
-    g.texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height);
-    g.width = g.texture != nullptr ? width : 0;
-    g.height = g.texture != nullptr ? height : 0;
+    for (SDL_Texture** texture : {&g.texture, &g.crt}) {
+        if (*texture != nullptr) SDL_DestroyTexture(*texture);
+        *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, width, height);
+    }
+    // The CRT shader reads the picture between its pixels.
+    if (g.texture != nullptr) SDL_SetTextureScaleMode(g.texture, SDL_ScaleModeLinear);
+    const bool made = g.texture != nullptr && g.crt != nullptr;
+    g.width = made ? width : 0;
+    g.height = made ? height : 0;
     g.pixels.assign(static_cast<size_t>(g.width) * g.height, 0);
-    return g.texture != nullptr;
+    return made;
 }
 
 // Draws the picture and reads it back; false when the painter had none.
@@ -93,6 +101,7 @@ bool Draw(SDL_Renderer* renderer) {
     const bool drawn = g.painter && g.painter(renderer, g.width, g.height);
     SDL_RenderSetScale(renderer, 1.0f, 1.0f);
     SDL_RenderSetClipRect(renderer, nullptr);
+    if (drawn && Crt::Apply(renderer, g.texture, g.crt, g.width, g.height)) SDL_SetRenderTarget(renderer, g.crt);
     const bool read = drawn && SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
                                                     g.pixels.data(), g.width * 4) == 0;
     SDL_SetRenderTarget(renderer, previous);

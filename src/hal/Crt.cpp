@@ -1,5 +1,7 @@
 #include "hal/Crt.h"
 
+#include <algorithm>
+
 #ifdef __ANDROID__
 #include <GLES2/gl2.h>
 #include <android/log.h>
@@ -8,10 +10,82 @@
 namespace HAL::Crt {
 
 namespace {
-bool g_wanted = true;
+
+// Each mode's monitor: how many screen pixels tall its scan lines are, how
+// hard their edges and its pixels' are (crt-lottes's hardScan and hardPix),
+// its shadow mask (0 none, 1 an aperture grille, 2 a stretched VGA mask), the
+// mask's size in screen pixels, how dark and light its stripes are, its bloom,
+// and how much brighter it is drawn, for what the lines and the mask darken.
+struct Monitor {
+    const char* name;
+    float pixels_per_line;
+    float hard_scan;
+    float hard_pix;
+    float mask_kind;
+    float mask_size;
+    float mask_dark;
+    float mask_light;
+    float bloom;
+    float boost;
+};
+constexpr Monitor kMonitors[kModeCount] = {
+    {"Off", 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f},
+    {"Soft", 1.5f, -8.0f, -3.0f, 2.0f, 1.0f, 0.75f, 1.25f, 0.10f, 1.1f},
+    {"Arcade", 2.0f, -10.0f, -3.0f, 1.0f, 1.0f, 0.75f, 1.25f, 0.15f, 1.3f},
+    {"TV", 3.0f, -12.0f, -2.0f, 2.0f, 2.0f, 0.55f, 1.45f, 0.25f, 1.45f},
+};
+
+// Where the scan lines fall: with an even number of screen pixels to a line,
+// they are moved a half pixel so that one pixel lies on a line's middle and
+// one between two lines, else both would be lit alike and no line would show.
+float LineShift(float pixels_per_line) {
+    const int whole = static_cast<int>(pixels_per_line);
+    return whole == pixels_per_line && whole % 2 == 0 ? 0.5f / pixels_per_line : 0.0f;
+}
+
+struct Setting {
+    int mode = kArcade;
+    int intensity = 100;
+    Uint32 changed_ms = 0;
+    bool unsaved = false;
+};
+Setting g_setting;
+
+void Changed() {
+    g_setting.changed_ms = SDL_GetTicks();
+    if (g_setting.changed_ms == 0) g_setting.changed_ms = 1;
+    g_setting.unsaved = true;
+}
+
 } // namespace
 
-void SetWanted(bool wanted) { g_wanted = wanted; }
+void Set(int mode, int intensity_percent) {
+    g_setting.mode = std::clamp(mode, 0, kModeCount - 1);
+    g_setting.intensity = std::clamp(intensity_percent, 0, 100);
+}
+
+int CurrentMode() { return g_setting.mode; }
+int Intensity() { return g_setting.intensity; }
+
+const char* ModeName(int mode) { return kMonitors[std::clamp(mode, 0, kModeCount - 1)].name; }
+
+void StepMode(int by) {
+    g_setting.mode = ((g_setting.mode + by) % kModeCount + kModeCount) % kModeCount;
+    Changed();
+}
+
+void StepIntensity(int by) {
+    g_setting.intensity = std::clamp(g_setting.intensity + by * kIntensityStep, kIntensityStep, 100);
+    Changed();
+}
+
+Uint32 ChangedMs() { return g_setting.changed_ms; }
+
+bool TakeChange() {
+    const bool unsaved = g_setting.unsaved;
+    g_setting.unsaved = false;
+    return unsaved;
+}
 
 #ifdef __ANDROID__
 
@@ -23,35 +97,45 @@ namespace {
 constexpr GLuint kPositionAttribute = 0;
 constexpr GLuint kUvAttribute = 2;
 
+// u_flip is 1 when drawing into a render target, whose rows SDL keeps top
+// first.
 constexpr const char* kVertexShader = R"(
 attribute vec2 a_position;
 attribute vec2 a_uv;
+uniform float u_flip;
 varying vec2 v_uv;
 void main() {
     v_uv = a_uv;
-    gl_Position = vec4(a_position, 0.0, 1.0);
+    gl_Position = vec4(a_position.x, mix(a_position.y, -a_position.y, u_flip), 0.0, 1.0);
 }
 )";
 
 // PUBLIC DOMAIN CRT STYLED SCAN-LINE SHADER by Timothy Lottes, as libretro
-// carries it (crt-lottes), for OpenGL ES 2: its default settings, the
-// stretched VGA shadow mask, and no warp. u_swap is 1 for a frame whose red and
-// blue lie the other way round in memory, as SDL's own shaders allow for.
+// carries it (crt-lottes), for OpenGL ES 2, with no warp. Its settings come
+// from the mode (Monitor), and it samples the picture at the monitor's own
+// pixels, u_lines across and down, rather than at the picture's. The result
+// is mixed with the plain picture by u_intensity. u_swap is 1 for a picture
+// whose red and blue lie the other way round in memory, as SDL's own shaders
+// allow for.
 constexpr const char* kFragmentShader = R"(
 precision highp float;
 uniform sampler2D u_frame;
-uniform vec2 u_input;
+uniform vec2 u_lines;
 uniform float u_swap;
+uniform float u_hard_scan;
+uniform float u_hard_pix;
+uniform float u_mask_kind;
+uniform float u_mask_size;
+uniform float u_mask_dark;
+uniform float u_mask_light;
+uniform float u_bloom;
+uniform float u_boost;
+uniform float u_line_shift;
+uniform float u_intensity;
 varying vec2 v_uv;
 
-const float hardScan = -8.0;
-const float hardPix = -3.0;
-const float maskDark = 0.5;
-const float maskLight = 1.5;
-const float brightBoost = 1.0;
 const float hardBloomPix = -1.5;
 const float hardBloomScan = -2.0;
-const float bloomAmount = 0.15;
 const float shape = 2.0;
 
 float ToLinear1(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
@@ -59,14 +143,17 @@ vec3 ToLinear(vec3 c) { return vec3(ToLinear1(c.r), ToLinear1(c.g), ToLinear1(c.
 float ToSrgb1(float c) { return c < 0.0031308 ? c * 12.92 : 1.055 * pow(c, 0.41666) - 0.055; }
 vec3 ToSrgb(vec3 c) { return vec3(ToSrgb1(c.r), ToSrgb1(c.g), ToSrgb1(c.b)); }
 
-vec3 Fetch(vec2 pos, vec2 off) {
-    pos = (floor(pos * u_input + off) + vec2(0.5)) / u_input;
+vec3 Sample(vec2 pos) {
     vec3 c = texture2D(u_frame, pos).rgb;
-    return ToLinear(brightBoost * mix(c, c.bgr, u_swap));
+    return ToLinear(mix(c, c.bgr, u_swap));
+}
+
+vec3 Fetch(vec2 pos, vec2 off) {
+    return u_boost * Sample((floor(pos * u_lines + off) + vec2(0.5)) / u_lines);
 }
 
 vec2 Dist(vec2 pos) {
-    pos = pos * u_input;
+    pos = pos * u_lines;
     return -((pos - floor(pos)) - vec2(0.5));
 }
 
@@ -77,9 +164,9 @@ vec3 Horz3(vec2 pos, float off) {
     vec3 c = Fetch(pos, vec2(0.0, off));
     vec3 d = Fetch(pos, vec2(1.0, off));
     float dst = Dist(pos).x;
-    float wb = Gaus(dst - 1.0, hardPix);
-    float wc = Gaus(dst + 0.0, hardPix);
-    float wd = Gaus(dst + 1.0, hardPix);
+    float wb = Gaus(dst - 1.0, u_hard_pix);
+    float wc = Gaus(dst + 0.0, u_hard_pix);
+    float wd = Gaus(dst + 1.0, u_hard_pix);
     return (b * wb + c * wc + d * wd) / (wb + wc + wd);
 }
 
@@ -90,11 +177,11 @@ vec3 Horz5(vec2 pos, float off) {
     vec3 d = Fetch(pos, vec2(1.0, off));
     vec3 e = Fetch(pos, vec2(2.0, off));
     float dst = Dist(pos).x;
-    float wa = Gaus(dst - 2.0, hardPix);
-    float wb = Gaus(dst - 1.0, hardPix);
-    float wc = Gaus(dst + 0.0, hardPix);
-    float wd = Gaus(dst + 1.0, hardPix);
-    float we = Gaus(dst + 2.0, hardPix);
+    float wa = Gaus(dst - 2.0, u_hard_pix);
+    float wb = Gaus(dst - 1.0, u_hard_pix);
+    float wc = Gaus(dst + 0.0, u_hard_pix);
+    float wd = Gaus(dst + 1.0, u_hard_pix);
+    float we = Gaus(dst + 2.0, u_hard_pix);
     return (a * wa + b * wb + c * wc + d * wd + e * we) / (wa + wb + wc + wd + we);
 }
 
@@ -118,7 +205,7 @@ vec3 Horz7(vec2 pos, float off) {
            (wa + wb + wc + wd + we + wf + wg);
 }
 
-float Scan(vec2 pos, float off) { return Gaus(Dist(pos).y + off, hardScan); }
+float Scan(vec2 pos, float off) { return Gaus(Dist(pos).y + off, u_hard_scan); }
 float BloomScan(vec2 pos, float off) { return Gaus(Dist(pos).y + off, hardBloomScan); }
 
 vec3 Tri(vec2 pos) {
@@ -139,24 +226,27 @@ vec3 Bloom(vec2 pos) {
 }
 
 vec3 Mask(vec2 pos) {
-    pos.x += pos.y * 3.0;
-    vec3 mask = vec3(maskDark);
-    pos.x = fract(pos.x / 6.0);
-    if (pos.x < 0.333) mask.r = maskLight;
-    else if (pos.x < 0.666) mask.g = maskLight;
-    else mask.b = maskLight;
+    vec3 mask = vec3(u_mask_dark);
+    if (u_mask_kind < 0.5) return vec3(1.0);
+    if (u_mask_kind > 1.5) pos.x += pos.y * 3.0;
+    pos.x = fract(pos.x / (u_mask_kind > 1.5 ? 6.0 : 3.0));
+    if (pos.x < 0.333) mask.r = u_mask_light;
+    else if (pos.x < 0.666) mask.g = u_mask_light;
+    else mask.b = u_mask_light;
     return mask;
 }
 
 void main() {
-    vec3 colour = Tri(v_uv) + Bloom(v_uv) * bloomAmount;
-    colour *= Mask(gl_FragCoord.xy * 1.000001);
-    gl_FragColor = vec4(ToSrgb(colour), 1.0);
+    vec2 pos = v_uv + vec2(0.0, u_line_shift / u_lines.y);
+    vec3 crt = Tri(pos);
+    if (u_bloom > 0.0) crt += Bloom(pos) * u_bloom;
+    crt *= Mask(floor(gl_FragCoord.xy / u_mask_size));
+    gl_FragColor = vec4(ToSrgb(mix(Sample(v_uv), crt, u_intensity)), 1.0);
 }
 )";
 
 // The whole viewport as a strip of two triangles: each corner's place, and
-// the frame's point there, its top row first.
+// the picture's point there, its top row first.
 constexpr GLfloat kQuad[] = {
     -1.0f, 1.0f, 0.0f, 0.0f,
     -1.0f, -1.0f, 0.0f, 1.0f,
@@ -168,9 +258,9 @@ struct Shader {
     bool failed = false;
     GLuint program = 0;
     GLuint quad = 0;
-    GLint frame = -1;
-    GLint input = -1;
-    GLint swap = -1;
+    GLint frame = -1, lines = -1, swap = -1, flip = -1;
+    GLint hard_scan = -1, hard_pix = -1, mask_kind = -1, mask_size = -1;
+    GLint mask_dark = -1, mask_light = -1, bloom = -1, boost = -1, line_shift = -1, intensity = -1;
 };
 Shader g;
 
@@ -218,8 +308,19 @@ bool Ready() {
     }
     g.program = program;
     g.frame = glGetUniformLocation(program, "u_frame");
-    g.input = glGetUniformLocation(program, "u_input");
+    g.lines = glGetUniformLocation(program, "u_lines");
     g.swap = glGetUniformLocation(program, "u_swap");
+    g.flip = glGetUniformLocation(program, "u_flip");
+    g.hard_scan = glGetUniformLocation(program, "u_hard_scan");
+    g.hard_pix = glGetUniformLocation(program, "u_hard_pix");
+    g.mask_kind = glGetUniformLocation(program, "u_mask_kind");
+    g.mask_size = glGetUniformLocation(program, "u_mask_size");
+    g.mask_dark = glGetUniformLocation(program, "u_mask_dark");
+    g.mask_light = glGetUniformLocation(program, "u_mask_light");
+    g.bloom = glGetUniformLocation(program, "u_bloom");
+    g.boost = glGetUniformLocation(program, "u_boost");
+    g.line_shift = glGetUniformLocation(program, "u_line_shift");
+    g.intensity = glGetUniformLocation(program, "u_intensity");
     GLint bound = 0;
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &bound);
     glGenBuffers(1, &g.quad);
@@ -229,19 +330,18 @@ bool Ready() {
     return true;
 }
 
-} // namespace
-
-bool Present(SDL_Renderer* renderer, SDL_Texture* frame, int frame_w, int frame_h, const SDL_Rect& dest,
-             int drawable_h) {
-    if (!g_wanted) return false;
+// Draws `source`, `w` by `h` pixels, into the viewport at (x, y) of the
+// framebuffer SDL has bound, `view_w` by `view_h`, through the mode's
+// monitor. SDL keeps track of the state it last set rather than set it for
+// every draw, so what is changed here is put back after.
+bool Draw(SDL_Renderer* renderer, SDL_Texture* source, int w, int h, int x, int y, int view_w, int view_h,
+          bool into_target) {
+    const Monitor& monitor = kMonitors[g_setting.mode];
     Uint32 format = 0;
-    if (SDL_QueryTexture(frame, &format, nullptr, nullptr, nullptr) != 0) return false;
-    const bool swap = format == SDL_PIXELFORMAT_ARGB8888 || format == SDL_PIXELFORMAT_RGB888;
+    if (g_setting.mode == kOff || SDL_QueryTexture(source, &format, nullptr, nullptr, nullptr) != 0) return false;
     SDL_RenderFlush(renderer);
     if (!Ready()) return false;
 
-    // What SDL's renderer last set and expects to find again: it keeps track
-    // of these rather than set them for every draw.
     GLint program = 0, buffer = 0;
     GLint viewport[4] = {};
     GLint uv_enabled = GL_FALSE;
@@ -252,7 +352,7 @@ bool Present(SDL_Renderer* renderer, SDL_Texture* frame, int frame_w, int frame_
     const GLboolean blend = glIsEnabled(GL_BLEND);
     const GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST);
 
-    if (SDL_GL_BindTexture(frame, nullptr, nullptr) != 0) return false;
+    if (SDL_GL_BindTexture(source, nullptr, nullptr) != 0) return false;
     glUseProgram(g.program);
     glBindBuffer(GL_ARRAY_BUFFER, g.quad);
     glEnableVertexAttribArray(kPositionAttribute);
@@ -262,12 +362,24 @@ bool Present(SDL_Renderer* renderer, SDL_Texture* frame, int frame_w, int frame_
                           reinterpret_cast<const void*>(2 * sizeof(GLfloat)));
     glDisable(GL_BLEND);
     glDisable(GL_SCISSOR_TEST);
-    glViewport(dest.x, drawable_h - dest.y - dest.h, dest.w, dest.h);
+    glViewport(x, y, view_w, view_h);
+    const float lines_down = static_cast<float>(view_h) / monitor.pixels_per_line;
     glUniform1i(g.frame, 0);
-    glUniform2f(g.input, static_cast<GLfloat>(frame_w), static_cast<GLfloat>(frame_h));
-    glUniform1f(g.swap, swap ? 1.0f : 0.0f);
+    glUniform2f(g.lines, lines_down * static_cast<float>(w) / static_cast<float>(h), lines_down);
+    glUniform1f(g.swap, format == SDL_PIXELFORMAT_ARGB8888 || format == SDL_PIXELFORMAT_RGB888 ? 1.0f : 0.0f);
+    glUniform1f(g.flip, into_target ? 1.0f : 0.0f);
+    glUniform1f(g.hard_scan, monitor.hard_scan);
+    glUniform1f(g.hard_pix, monitor.hard_pix);
+    glUniform1f(g.mask_kind, monitor.mask_kind);
+    glUniform1f(g.mask_size, monitor.mask_size);
+    glUniform1f(g.mask_dark, monitor.mask_dark);
+    glUniform1f(g.mask_light, monitor.mask_light);
+    glUniform1f(g.bloom, monitor.bloom);
+    glUniform1f(g.boost, monitor.boost);
+    glUniform1f(g.line_shift, LineShift(monitor.pixels_per_line));
+    glUniform1f(g.intensity, static_cast<float>(g_setting.intensity) / 100.0f);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    SDL_GL_UnbindTexture(frame);
+    SDL_GL_UnbindTexture(source);
 
     glUseProgram(static_cast<GLuint>(program));
     glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(buffer));
@@ -278,9 +390,26 @@ bool Present(SDL_Renderer* renderer, SDL_Texture* frame, int frame_w, int frame_
     return true;
 }
 
+} // namespace
+
+bool Present(SDL_Renderer* renderer, SDL_Texture* frame, int frame_w, int frame_h, const SDL_Rect& dest,
+             int drawable_h) {
+    return Draw(renderer, frame, frame_w, frame_h, dest.x, drawable_h - dest.y - dest.h, dest.w, dest.h, false);
+}
+
+bool Apply(SDL_Renderer* renderer, SDL_Texture* source, SDL_Texture* target, int w, int h) {
+    if (g_setting.mode == kOff) return false;
+    SDL_Texture* previous = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, target);
+    const bool drawn = Draw(renderer, source, w, h, 0, 0, w, h, true);
+    SDL_SetRenderTarget(renderer, previous);
+    return drawn;
+}
+
 #else
 
 bool Present(SDL_Renderer*, SDL_Texture*, int, int, const SDL_Rect&, int) { return false; }
+bool Apply(SDL_Renderer*, SDL_Texture*, SDL_Texture*, int, int) { return false; }
 
 #endif
 

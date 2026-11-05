@@ -1816,9 +1816,11 @@ int main(int argc, char* argv[]) {
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
     // Held sideways, either way up, as the screen the game was made for.
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
-    // Played with the fingers as with a mouse (hal/Touch), and the back
-    // gesture is Escape (hal/Window) rather than the end of the game.
+    // Played with the fingers as with a mouse (hal/Touch), with a gamepad as
+    // a mouse and the game's keys (hal/Pad), and the back gesture is Escape
+    // (hal/Window) rather than the end of the game.
     HAL::Touch::Enable();
+    HAL::Pad::Enable();
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
     if (const char* storage = SDL_AndroidGetInternalStoragePath()) {
         const std::string run = std::string(storage) + "/game/build";

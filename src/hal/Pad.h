@@ -23,6 +23,26 @@ namespace HAL::Pad {
 //   D-pad down          the selected unit                  Space
 //   D-pad left, right   slower, faster                     keypad - and +
 //
+// On Android, a gamepad by SDL's standard layout (an Xbox controller's, as
+// the AYN Thor's own is seen):
+//
+//   left stick          the pointer
+//   right stick         the map
+//   A                   the left button; held, a drag
+//   B                   a right click
+//   X                   pause                              F3
+//   Y                   Escape
+//   LB, held            Shift
+//   RB                  the next idle villager             .
+//   LT, RT              zoom out and in, the further the faster
+//   D-pad up, down      faster, slower                     keypad + and -
+//   D-pad left          the Town Center                    H
+//   D-pad right         the next idle military unit        ,
+//   left stick, pushed  the selected unit                  Space
+//   right stick, pushed the last notification              Home
+//   Start               the game menu                      F10
+//   Back                chat                               Enter
+//
 // The keys are the game's default hotkeys, pressed as though typed.
 
 // Turns the controls on. Left off, every call here does nothing.
@@ -41,7 +61,7 @@ void Update();
 void Scroll(float& x, float& y);
 
 // With ZL held, how far the right stick is pushed up (to 1, zooming in) or
-// down (to -1, zooming out); 0 otherwise.
+// down (to -1, zooming out); 0 otherwise. On Android, the triggers.
 float Zoom();
 
 // A short buzz of the controller.

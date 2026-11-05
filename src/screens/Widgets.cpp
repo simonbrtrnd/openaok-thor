@@ -1,6 +1,7 @@
 #include "Widgets.h"
 
 #include "core/Profile.h"
+#include "hal/Crt.h"
 #include "hal/GraphicCache.h"
 #include "hal/TextInput.h"
 #include "rendering/Text.h"
@@ -638,6 +639,36 @@ void DrawNotice(SDL_Renderer* r, const Theme& dialog, const Notice& box, const P
         y += Text::Height(font);
     }
     DrawButton(r, dialog, box.ok, StateOf(box.ok, p.x, p.y, p.held));
+}
+
+CrtChoice MakeCrtChoice(int x, int y, int mode, int intensity) {
+    CrtChoice c;
+    c.mode_box = SDL_Rect{x, y, 105, 27};
+    c.intensity_box = SDL_Rect{x + 110, y, 50, 27};
+    c.mode = mode;
+    c.intensity = intensity;
+    return c;
+}
+
+void DrawCrtChoice(SDL_Renderer* r, const Theme& theme, const CrtChoice& c, int mx, int my, bool held) {
+    const Button mode{c.mode_box, std::string("CRT: ") + HAL::Crt::ModeName(c.mode), Rendering::Text::kGeorgia10B};
+    DrawButton(r, theme, mode, StateOf(mode, mx, my, held));
+    const Button intensity{c.intensity_box, std::to_string(c.intensity) + "%", Rendering::Text::kGeorgia10B,
+                           c.mode != HAL::Crt::kOff};
+    DrawButton(r, theme, intensity, StateOf(intensity, mx, my, held));
+}
+
+bool PressCrtChoice(CrtChoice& c, int x, int y) {
+    const SDL_Point at{x, y};
+    if (SDL_PointInRect(&at, &c.mode_box) == SDL_TRUE) {
+        c.mode = (c.mode + 1) % HAL::Crt::kModeCount;
+        return true;
+    }
+    if (c.mode != HAL::Crt::kOff && SDL_PointInRect(&at, &c.intensity_box) == SDL_TRUE) {
+        c.intensity = c.intensity >= 100 ? 20 : std::min(100, (c.intensity / 20 + 1) * 20);
+        return true;
+    }
+    return false;
 }
 
 } // namespace Screens

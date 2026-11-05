@@ -44,7 +44,8 @@ Options Load() {
         else if (key == "widescreen") options.widescreen = value != 0;
         else if (key == "no_selection_limit") options.no_selection_limit = value != 0;
         else if (key == "production_queue") options.production_queue = value != 0;
-        else if (key == "crt_filter") options.crt_filter = value != 0;
+        else if (key == "crt_mode") options.crt_mode = value;
+        else if (key == "crt_intensity") options.crt_intensity = value;
         else if (key == "top_bar_size") options.top_bar_size = value;
         else if (key == "panel_size") options.panel_size = value;
         else if (key == "text_size") options.text_size = value;
@@ -91,7 +92,8 @@ void Save(const Options& options) {
         << "widescreen " << (options.widescreen ? 1 : 0) << "\n"
         << "no_selection_limit " << (options.no_selection_limit ? 1 : 0) << "\n"
         << "production_queue " << (options.production_queue ? 1 : 0) << "\n"
-        << "crt_filter " << (options.crt_filter ? 1 : 0) << "\n"
+        << "crt_mode " << options.crt_mode << "\n"
+        << "crt_intensity " << options.crt_intensity << "\n"
         << "top_bar_size " << options.top_bar_size << "\n"
         << "panel_size " << options.panel_size << "\n"
         << "text_size " << options.text_size << "\n"

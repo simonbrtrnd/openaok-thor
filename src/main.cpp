@@ -1442,6 +1442,13 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
         Core::InputManager::Get().Hover(*sim, renderer);
         Core::InputManager::Get().HandleSecondScreen(
             *sim, renderer, GameDialogs::Current() == GameDialogs::Dialog::None);
+        // The CRT look as the controller last set it, kept for next time.
+        if (HAL::Crt::TakeChange()) {
+            auto& profile = Core::Profile::Current();
+            profile.crt_mode = HAL::Crt::CurrentMode();
+            profile.crt_intensity = HAL::Crt::Intensity();
+            Core::Profile::Save(profile);
+        }
         if (watches_selection) {
             std::vector<entt::entity> selected;
             auto view = sim->GetRegistry().view<ECS::Components::Selectable>();
@@ -1941,7 +1948,7 @@ int main(int argc, char* argv[]) {
         HAL::Audio::SetVolume(static_cast<float>(Core::Profile::Current().sound_volume) / 10.0f);
         Audio::Music::SetVolume(Core::Profile::Current().music_volume);
     }
-    HAL::Crt::SetWanted(Core::Profile::Current().crt_filter);
+    HAL::Crt::Set(Core::Profile::Current().crt_mode, Core::Profile::Current().crt_intensity);
     Screens::Init();
 
     // A show of campaign slides on its own.

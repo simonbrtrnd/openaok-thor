@@ -175,6 +175,20 @@ struct CheckBox {
 };
 void DrawCheckBox(SDL_Renderer* r, const Theme& theme, const CheckBox& c, int mx, int my, bool held);
 
+// The CRT look's two buttons (hal/Crt): its mode, then its intensity, each
+// pressed to step on to the next, the intensity by fifths.
+struct CrtChoice {
+    SDL_Rect mode_box{0, 0, 0, 0};
+    SDL_Rect intensity_box{0, 0, 0, 0};
+    int mode = 0;
+    int intensity = 100;
+};
+// The two side by side, the first's top left at (x, y).
+CrtChoice MakeCrtChoice(int x, int y, int mode, int intensity);
+void DrawCrtChoice(SDL_Renderer* r, const Theme& theme, const CrtChoice& c, int mx, int my, bool held);
+// True when a press at (x, y) stepped one of them on.
+bool PressCrtChoice(CrtChoice& c, int x, int y);
+
 // A slider: a track with a thumb, its value from 0 to `steps`.
 struct Slider {
     SDL_Rect track{0, 0, 0, 0};

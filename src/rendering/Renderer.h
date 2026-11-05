@@ -60,7 +60,7 @@ public:
     // How far the view may zoom out and in, and the step a wheel notch or a
     // key press takes. The original has no zoom; it is ours. In as far as
     // three times the art's size, for a handheld's small screen.
-    static constexpr float kZoomOut = 0.4f;
+    static constexpr float kZoomOut = 0.5f;
     static constexpr float kZoomIn = 3.0f;
     static constexpr float kZoomStep = 1.1f;
     // The zooms the view stops on as it zooms through them. Zooming as it is

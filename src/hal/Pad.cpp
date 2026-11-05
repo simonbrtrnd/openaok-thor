@@ -65,6 +65,8 @@ struct State {
     float y = -1.0f;
     bool zl = false;   // held: the right stick zooms
     bool back_held = false;   // Android: Back is down
+    bool dialog = false;      // a screen over the game is open
+    bool b_escape = false;    // B went down as Escape, over a dialog
     bool back_used = false;   // and the d-pad has been pressed with it
     Uint64 last = 0;   // SDL's performance counter at the last Update
 };
@@ -202,6 +204,8 @@ bool Enabled() { return g.enabled; }
 
 bool GamepadConnected() { return g.controller != nullptr; }
 
+void SetDialogOpen(bool open) { g.dialog = open; }
+
 bool Handle(const SDL_Event& event) {
 #ifdef __ANDROID__
     if (!g.enabled) return false;
@@ -212,6 +216,16 @@ bool Handle(const SDL_Event& event) {
     if (event.type != SDL_CONTROLLERBUTTONDOWN && event.type != SDL_CONTROLLERBUTTONUP) return false;
     const bool pressed = event.type == SDL_CONTROLLERBUTTONDOWN;
     const int pad_button = event.cbutton.button;
+    // Over a dialog, B is Escape, its release with it however the dialog has
+    // gone in between.
+    if (pad_button == SDL_CONTROLLER_BUTTON_B && (pressed ? g.dialog : g.b_escape)) {
+        if (pressed) {
+            Key(SDL_SCANCODE_ESCAPE, true);
+            Key(SDL_SCANCODE_ESCAPE, false);
+        }
+        g.b_escape = pressed;
+        return true;
+    }
     if (pad_button == SDL_CONTROLLER_BUTTON_A || pad_button == SDL_CONTROLLER_BUTTON_B) {
         const Uint8 mouse = pad_button == SDL_CONTROLLER_BUTTON_A ? SDL_BUTTON_LEFT : SDL_BUTTON_RIGHT;
         if (pressed) {

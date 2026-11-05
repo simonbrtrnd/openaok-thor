@@ -29,7 +29,7 @@ namespace HAL::Pad {
 //   left stick          the pointer
 //   right stick         the map
 //   A                   the left button; held, a drag
-//   B                   a right click
+//   B                   a right click; over a dialog, Escape
 //   X                   pause                              F3
 //   Y                   Escape
 //   LB, held            Shift
@@ -55,6 +55,10 @@ bool Enabled();
 // Whether a gamepad is open (Android). Its right stick then scrolls the map,
 // and the screen's edges do not.
 bool GamepadConnected();
+
+// Whether a screen over the game is open (screens/GameDialogs): a gamepad's B
+// then backs out of it, as Escape does, rather than click the right button.
+void SetDialogOpen(bool open);
 
 // A controller's button: true when the event was the controls' and has been
 // dealt with.

@@ -1442,6 +1442,7 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
         Core::InputManager::Get().Hover(*sim, renderer);
         Core::InputManager::Get().HandleSecondScreen(
             *sim, renderer, GameDialogs::Current() == GameDialogs::Dialog::None);
+        HAL::Pad::SetDialogOpen(GameDialogs::Current() != GameDialogs::Dialog::None);
         // The CRT look as the controller last set it, kept for next time.
         if (HAL::Crt::TakeChange()) {
             auto& profile = Core::Profile::Current();
@@ -1654,6 +1655,7 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
         }
         HoldFrame(prev_time);
     }
+    HAL::Pad::SetDialogOpen(false);
     if (launch.report_frames && frame_report.frames > 0) {
         std::cout << "[App] " << frame_report.frames << " frames, average "
                   << static_cast<double>(frame_report.total.count()) / frame_report.frames / 1000.0

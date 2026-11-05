@@ -1057,36 +1057,30 @@ int g_w = 1024;
 int g_h = 768;
 float g_scale = 1.0f;
 
-// A dialog grows as far as the frame has room for it, a margin left round it,
-// up to kMostDialogScale. One that covers the frame is laid out for the
-// smallest screen the game offers and grows from there.
-constexpr float kMostDialogScale = 2.5f;
-constexpr float kDialogMargin = 0.92f;
+// The technology tree and the achievements, which cover the frame, are drawn
+// as on the smallest screen the game offers, 800x600, scaled up to the frame.
+// The windows over the game share one size, the largest at which every one of
+// them fits with a margin round it, so that none looks larger than the rest.
+constexpr uint32_t kWindowArt[] = {Sin::kGameMenu, Sin::kGameDialog, Sin::kObjectives, Sin::kDiplomacy,
+                                   Sin::kChat};
+constexpr float kDialogMargin = 0.95f;
 
 float DialogScale(Dialog dialog, int w, int h) {
 #ifdef __ANDROID__
-    uint32_t sin = 0;
-    switch (dialog) {
-    case Dialog::Menu:
-    case Dialog::Confirm: sin = Sin::kGameMenu; break;
-    case Dialog::Options:
-    case Dialog::SaveGame: sin = Sin::kGameDialog; break;
-    case Dialog::Objectives: sin = Sin::kObjectives; break;
-    case Dialog::Diplomacy: sin = Sin::kDiplomacy; break;
-    case Dialog::Chat: sin = Sin::kChat; break;
-    case Dialog::TechTree:
-    case Dialog::Achievements: {
-        const HAL::ScreenSize& least = HAL::kScreenSizes[0];
-        return std::max(1.0f, std::min(static_cast<float>(w) / static_cast<float>(least.width),
-                                       static_cast<float>(h) / static_cast<float>(least.height)));
+    if (dialog == Dialog::None || dialog == Dialog::ChatLine) return 1.0f;
+    const float fw = static_cast<float>(w);
+    const float fh = static_cast<float>(h);
+    const HAL::ScreenSize& least = HAL::kScreenSizes[0];
+    const float screen = std::max(1.0f, std::min(fw / static_cast<float>(least.width),
+                                                 fh / static_cast<float>(least.height)));
+    if (dialog == Dialog::TechTree || dialog == Dialog::Achievements) return screen;
+    float fit = fw;
+    for (uint32_t sin : kWindowArt) {
+        const SDL_Point art = ArtOf(sin)->parchment;
+        fit = std::min({fit, fw * kDialogMargin / static_cast<float>(art.x),
+                        fh * kDialogMargin / static_cast<float>(art.y)});
     }
-    default: return 1.0f;
-    }
-    const DialogArt* art = ArtOf(sin);
-    if (art == nullptr) return 1.0f;
-    const float fit = std::min(static_cast<float>(w) * kDialogMargin / static_cast<float>(art->parchment.x),
-                               static_cast<float>(h) * kDialogMargin / static_cast<float>(art->parchment.y));
-    return std::clamp(fit, 1.0f, kMostDialogScale);
+    return std::max(screen, fit);
 #else
     (void)dialog;
     (void)w;

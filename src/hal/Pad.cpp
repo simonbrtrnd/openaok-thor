@@ -198,6 +198,8 @@ void Enable() { g.enabled = true; }
 
 bool Enabled() { return g.enabled; }
 
+bool GamepadConnected() { return g.controller != nullptr; }
+
 bool Handle(const SDL_Event& event) {
 #ifdef __ANDROID__
     if (!g.enabled) return false;

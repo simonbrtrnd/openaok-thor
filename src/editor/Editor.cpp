@@ -806,8 +806,9 @@ void Update(float dt) {
         if (keys[SDL_SCANCODE_DOWN]) dy += 1;
     }
     // Edge scrolling wants a mouse; on a touch screen two fingers drag the
-    // map instead (hal/Touch).
-    if (s.ui.mx >= 0 && s.ui.my >= 0 && SDL_GetMouseFocus() != nullptr && HAL::Touch::MouseAttached()) {
+    // map instead (hal/Touch), and a gamepad scrolls with its stick.
+    if (s.ui.mx >= 0 && s.ui.my >= 0 && SDL_GetMouseFocus() != nullptr && HAL::Touch::MouseAttached() &&
+        !HAL::Pad::GamepadConnected()) {
         if (s.ui.mx <= kEdge) dx -= 1;
         if (s.ui.mx >= s.w - 1 - kEdge) dx += 1;
         if (s.ui.my <= kEdge) dy -= 1;

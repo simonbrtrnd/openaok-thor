@@ -3,6 +3,7 @@
 #include "FogRenderer.h"
 #include "TerrainRenderer.h"
 #include "EntityRenderer.h"
+#include "BottomPanel.h"
 #include "UIRenderer.h"
 #include "Messages.h"
 #include "HudLayout.h"
@@ -190,7 +191,9 @@ void Renderer::Render(ECS::Simulation& sim, HAL::Window& window, float alpha) {
 void Renderer::Finish(ECS::Simulation& sim, HAL::Window& window) {
     const auto start = std::chrono::steady_clock::now();
     UIRenderer::DrawCursor(sim, *this, window.GetSDLRenderer());
+    BottomPanel::SetGame(&sim, this);
     window.Present();
+    BottomPanel::SetGame(nullptr, nullptr);
     cost.finish = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now() - start).count();
 }

@@ -5,6 +5,7 @@
 #include <android/native_window_jni.h>
 #include <jni.h>
 
+#include <algorithm>
 #include <cstring>
 #include <mutex>
 #endif
@@ -40,20 +41,24 @@ struct State {
     std::vector<Uint32> pixels;
     Uint32 last_drawn = 0;
     bool due = true;
+    bool black = false;   // the screen shows black, the painter having had nothing
     std::vector<Touch> touches;
 };
 State g;
 
-ANativeWindow* AcquireWindow(int& width, int& height, bool& is_new) {
+// The window, held, and whether anything happened to it since the last frame.
+ANativeWindow* AcquireWindow(int& width, int& height, bool& is_new, bool& touched) {
     std::lock_guard<std::mutex> hold(shared.lock);
     if (shared.window != nullptr) ANativeWindow_acquire(shared.window);
     width = shared.width;
     height = shared.height;
     is_new = shared.new_window;
     shared.new_window = false;
-    if (!shared.touches.empty()) {
-        g.touches.insert(g.touches.end(), shared.touches.begin(), shared.touches.end());
-        shared.touches.clear();
+    touched = !shared.touches.empty();
+    g.touches.insert(g.touches.end(), shared.touches.begin(), shared.touches.end());
+    shared.touches.clear();
+    if (g.touches.size() > kMaxPendingTouches) {
+        g.touches.erase(g.touches.begin(), g.touches.end() - kMaxPendingTouches);
     }
     return shared.window;
 }
@@ -68,28 +73,34 @@ bool Resize(SDL_Renderer* renderer, int width, int height) {
     return g.texture != nullptr;
 }
 
+// Draws the picture and reads it back; false when the painter had none.
 bool Draw(SDL_Renderer* renderer) {
     SDL_Texture* previous = SDL_GetRenderTarget(renderer);
     SDL_SetRenderTarget(renderer, g.texture);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    if (g.painter) g.painter(renderer, g.width, g.height);
+    const bool drawn = g.painter && g.painter(renderer, g.width, g.height);
     SDL_RenderSetScale(renderer, 1.0f, 1.0f);
     SDL_RenderSetClipRect(renderer, nullptr);
-    const bool read = SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
-                                           g.pixels.data(), g.width * 4) == 0;
+    const bool read = drawn && SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_RGBA32,
+                                                    g.pixels.data(), g.width * 4) == 0;
     SDL_SetRenderTarget(renderer, previous);
     return read;
 }
 
-void Show(ANativeWindow* window) {
+// Copies the picture to the window, or fills it with black.
+void Show(ANativeWindow* window, bool picture) {
     ANativeWindow_Buffer buffer;
     if (ANativeWindow_lock(window, &buffer, nullptr) != 0) return;
-    if (buffer.width == g.width && buffer.height == g.height) {
-        auto* rows = static_cast<Uint32*>(buffer.bits);
+    auto* rows = static_cast<Uint32*>(buffer.bits);
+    if (picture && buffer.width == g.width && buffer.height == g.height) {
         for (int y = 0; y < g.height; ++y) {
             std::memcpy(rows + static_cast<size_t>(y) * buffer.stride,
                         g.pixels.data() + static_cast<size_t>(y) * g.width, g.width * sizeof(Uint32));
+        }
+    } else {
+        for (int y = 0; y < buffer.height; ++y) {
+            std::fill_n(rows + static_cast<size_t>(y) * buffer.stride, buffer.width, 0xff000000u);
         }
     }
     ANativeWindow_unlockAndPost(window);
@@ -114,13 +125,15 @@ void Invalidate() { g.due = true; }
 
 void Present(SDL_Renderer* renderer) {
     int width = 0, height = 0;
-    bool is_new = false;
-    ANativeWindow* window = AcquireWindow(width, height, is_new);
+    bool is_new = false, touched = false;
+    ANativeWindow* window = AcquireWindow(width, height, is_new, touched);
     if (window == nullptr) return;
     const Uint32 now = SDL_GetTicks();
-    const bool due = g.due || is_new || !g.touches.empty() || now - g.last_drawn >= kRefreshMs;
-    if (due && width > 0 && height > 0 && Resize(renderer, width, height) && Draw(renderer)) {
-        Show(window);
+    const bool due = g.due || is_new || touched || now - g.last_drawn >= kRefreshMs;
+    if (due && width > 0 && height > 0 && Resize(renderer, width, height)) {
+        const bool picture = Draw(renderer);
+        if (picture || !g.black || is_new) Show(window, picture);
+        g.black = !picture;
         g.due = false;
         g.last_drawn = now;
     }

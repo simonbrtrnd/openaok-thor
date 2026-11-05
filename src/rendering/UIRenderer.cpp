@@ -2762,6 +2762,101 @@ void UIRenderer::DrawInterface(ECS::Simulation& sim, Renderer& renderer, SDL_Ren
     DrawHelpText(sim, sdl_r, win_w, win_h);
 }
 
+namespace {
+
+// The second screen's layout (the AYN Thor's lower screen, 1240x1080): a
+// 16-pixel margin and gutter round two columns, 776 and 416 pixels wide, and
+// what of the 1024x768 interface each place shows, three times its size.
+constexpr SDL_Rect kSecondReadout = {16, 16, 1208, 75};
+constexpr SDL_Rect kSecondCard = {16, 107, 776, 330};
+constexpr SDL_Point kSecondAge = {808, 107};
+constexpr SDL_Rect kSecondMinimap = {808, 453, 416, 211};
+constexpr SDL_Rect kArtReadout = {0, 0, 392, 25};
+constexpr SDL_Rect kArtCard = {289, 616, 259, 110};
+constexpr SDL_Rect kArtMinimap = {690, 600, 322, 163};
+// The plain stone behind the command grid, which the screen is paved with,
+// twice its size.
+constexpr SDL_Rect kArtStone = {45, 628, 190, 120};
+constexpr int kStoneScale = 2;
+constexpr int kSecondTextPercent = 300;
+
+// The 1024x768 interface, drawn for the second screen to take its parts from.
+SDL_Texture* g_second_hud = nullptr;
+
+SDL_FRect Mapped(const SDL_FRect& r, const SDL_Rect& from, const SDL_Rect& to) {
+    const float sx = static_cast<float>(to.w) / static_cast<float>(from.w);
+    const float sy = static_cast<float>(to.h) / static_cast<float>(from.h);
+    return SDL_FRect{to.x + (r.x - from.x) * sx, to.y + (r.y - from.y) * sy, r.w * sx, r.h * sy};
+}
+
+void PaveWithStone(SDL_Renderer* sdl_r, const HAL::GraphicAtlas* atlas, int w, int h) {
+    if (atlas == nullptr || atlas->base == nullptr || atlas->frames.empty()) return;
+    const SDL_Rect& art = atlas->frames[0].rect;
+    const SDL_Rect from = {art.x + kArtStone.x, art.y + kArtStone.y, kArtStone.w, kArtStone.h};
+    for (int y = 0; y < h; y += kArtStone.h * kStoneScale) {
+        for (int x = 0; x < w; x += kArtStone.w * kStoneScale) {
+            const SDL_Rect to = {x, y, kArtStone.w * kStoneScale, kArtStone.h * kStoneScale};
+            SDL_RenderCopy(sdl_r, atlas->base, &from, &to);
+        }
+    }
+}
+
+} // namespace
+
+void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
+                                  int w, int h) {
+    constexpr int kHudW = 1024;
+    constexpr int kHudH = 768;
+    if (g_second_hud == nullptr) {
+        g_second_hud = SDL_CreateTexture(sdl_r, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, kHudW, kHudH);
+        if (g_second_hud == nullptr) return;
+        SDL_SetTextureBlendMode(g_second_hud, SDL_BLENDMODE_BLEND);
+        SDL_SetTextureScaleMode(g_second_hud, SDL_ScaleModeNearest);
+    }
+
+    // The interface's parts as the 1024x768 frame has them, the layout looked
+    // up for that frame and the real one's put back after.
+    const Frame frame = CurrentFrame();
+    SDL_Texture* target = SDL_GetRenderTarget(sdl_r);
+    SetFrame(kHudW, kHudH);
+    SDL_SetRenderTarget(sdl_r, g_second_hud);
+    SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(sdl_r, 0, 0, 0, 0);
+    SDL_RenderClear(sdl_r);
+    DrawArtPart(sdl_r, sim, kHudW, kHudH, false);
+    SelectionCard probe[2];
+    if (BuildSelectionCards(sim, kHudW, kHudH, probe, 2) >= 2) {
+        DrawSelectionCards(sdl_r, sim, kHudW, kHudH);
+    } else {
+        DrawUnitPanel(sdl_r, sim, kHudW, kHudH);
+    }
+    DrawArtPart(sdl_r, sim, kHudW, kHudH, true);
+    const HudLayout& layout = Lay(kHudW);
+    DrawFrame(sdl_r, kFoodIconSlp, 0, layout.food_icon.x, layout.food_icon.y);
+    DrawTopBar(sdl_r, sim, layout);
+    const SDL_FRect well = MinimapRect(kHudW, kHudH);
+    const HAL::GraphicAtlas* art =
+        HAL::GraphicCache::Get().GetInterfaceAtlas(HudArt(layout, LocalCiv(sim.GetRegistry())));
+    SetFrame(frame.w, frame.h);
+    SDL_SetRenderTarget(sdl_r, target);
+
+    PaveWithStone(sdl_r, art, w, h);
+    SDL_RenderCopy(sdl_r, g_second_hud, &kArtReadout, &kSecondReadout);
+    SDL_RenderCopy(sdl_r, g_second_hud, &kArtCard, &kSecondCard);
+    SDL_RenderCopy(sdl_r, g_second_hud, &kArtMinimap, &kSecondMinimap);
+    DrawMinimapIn(sim, renderer, sdl_r, Mapped(well, kArtMinimap, kSecondMinimap),
+                  SDL_FRect{0.0f, 0.0f, static_cast<float>(frame.w), static_cast<float>(frame.h)});
+
+    auto& registry = sim.GetRegistry();
+    const int age_tech = ECS::Techs::AgeTech(registry, LocalViewer(),
+                                             ECS::Techs::Age(registry, LocalViewer()));
+    const std::string& age = Core::Rules::TechLabel(age_tech);
+    if (!age.empty()) {
+        Text::DrawShadowed(sdl_r, Text::Scaled(Text::kGeorgia9B, kSecondTextPercent),
+                           kSecondAge.x, kSecondAge.y, age, kWhite, kBlack);
+    }
+}
+
 void UIRenderer::DrawCursor(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r) {
     (void)sim;
     (void)renderer;

@@ -49,6 +49,11 @@ public:
     // mini-map, and the rollover help, each at its size.
     static void DrawInterface(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
                               int win_w, int win_h);
+    // The picture of a second screen `w` by `h` pixels (rendering/BottomPanel):
+    // the readout, the age, the selected object or group and the mini-map,
+    // laid out for the AYN Thor's lower screen.
+    static void DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
+                                 int w, int h);
     static void DrawMinimap(ECS::Simulation& sim, Renderer& renderer,
                             SDL_Renderer* sdl_r, int win_w, int win_h);
     // The mini-map's picture alone -- ground, fog, contents, flares and the

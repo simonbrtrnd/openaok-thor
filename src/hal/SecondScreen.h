@@ -26,9 +26,10 @@ int Width();
 int Height();
 
 // What draws the screen's picture into the current render target, `w` by `h`
-// pixels. It is free to change the renderer's scale and clip, which are reset
-// after it.
-using Painter = std::function<void(SDL_Renderer* renderer, int w, int h)>;
+// pixels, and says whether it drew one: with none, the screen is left black
+// and nothing is read back. It is free to change the renderer's scale and
+// clip, which are reset after it.
+using Painter = std::function<bool(SDL_Renderer* renderer, int w, int h)>;
 void SetPainter(Painter painter);
 
 // The picture is drawn again at the next frame, rather than when it is due.

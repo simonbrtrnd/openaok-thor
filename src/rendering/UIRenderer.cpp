@@ -2918,9 +2918,9 @@ constexpr int kSecondGridInset = 8;
 constexpr int kSecondButtonArt = 38;
 constexpr int kSecondButtonScale = 4;
 constexpr int kSecondGridPitch = kSecondButtonArt * kSecondButtonScale;
-// The top bar's five buttons in a row under the readout, their pictures four
-// times their size, and the mini-map's eight, four by two, under it, three
-// times; each in the order of its enum.
+// The top bar's five buttons in a row under the readout, their pictures five
+// times their size and their sides cut to the tile, and the mini-map's eight,
+// four by two, under it, three times; each in the order of its enum.
 struct SecondTileGroup {
     SDL_Rect area;
     int columns;
@@ -2928,7 +2928,7 @@ struct SecondTileGroup {
 };
 constexpr SecondTileGroup kSecondBarTiles = {{16, 97, 1208, 100}, kBarButtonCount, 1};
 constexpr SecondTileGroup kSecondMinimapTiles = {{808, 819, 416, 245}, 4, 2};
-constexpr int kSecondBarArtScale = 4;
+constexpr int kSecondBarArtScale = 5;
 constexpr int kSecondMinimapArtScale = 3;
 using SecondKind = UIRenderer::SecondScreenTarget::Kind;
 // The help strings of the top bar's buttons, in their order.
@@ -2991,16 +2991,17 @@ int FittingFont(int font, int percent, int width, std::initializer_list<std::str
     return font;
 }
 
-// A frame of an interface sheet, `scale` times its size or as large as fits in
-// `r`, centred in it.
+// A frame of an interface sheet `scale` times its size, centred in `r` and cut
+// to it.
 void DrawCentred(SDL_Renderer* sdl_r, uint32_t slp_id, int frame, const SDL_Rect& r, int scale) {
     const HAL::GraphicAtlas* atlas = HAL::GraphicCache::Get().GetInterfaceAtlas(slp_id);
     if (!atlas || frame < 0 || frame >= static_cast<int>(atlas->frames.size())) return;
     const SDL_Rect& art = atlas->frames[frame].rect;
-    if (art.w <= 0 || art.h <= 0) return;
-    const int s = std::max(1, std::min({scale, r.w / art.w, r.h / art.h}));
-    DrawIcon(sdl_r, slp_id, frame,
-             SDL_Rect{r.x + (r.w - art.w * s) / 2, r.y + (r.h - art.h * s) / 2, art.w * s, art.h * s}, 1, 255);
+    const int w = art.w * scale;
+    const int h = art.h * scale;
+    SDL_RenderSetClipRect(sdl_r, &r);
+    DrawIcon(sdl_r, slp_id, frame, SDL_Rect{r.x + (r.w - w) / 2, r.y + (r.h - h) / 2, w, h}, 1, 255);
+    SDL_RenderSetClipRect(sdl_r, nullptr);
 }
 
 // The help a button of the second screen gives, as the rollover help does.
@@ -3227,7 +3228,8 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     for (int b = 0; b < kBarButtonCount; ++b) {
         const SDL_Rect r = SecondTile(kSecondBarTiles, b);
         SecondTileBox(sdl_r, r, false);
-        DrawCentred(sdl_r, kBarButtonSlp, kBarButtonFrame[b], r, kSecondBarArtScale);
+        DrawCentred(sdl_r, kBarButtonSlp, kBarButtonFrame[b], SDL_Rect{r.x + 2, r.y + 2, r.w - 4, r.h - 4},
+                    kSecondBarArtScale);
     }
 
     SDL_RenderCopy(sdl_r, g_second_hud, &kArtParchment, &kSecondCard);

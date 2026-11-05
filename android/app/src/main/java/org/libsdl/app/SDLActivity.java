@@ -826,7 +826,17 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
                     mSurface.requestFocus();
                     if (mTextEdit.getParent() != mLayout) {
-                        ((View) mTextEdit.getParent()).requestFocus();
+                        // OpenAoK: the editor is in another window (TextInputHost).
+                        // Its keyboard is put away by that window's input method
+                        // manager, or by this one's should this window have taken
+                        // the focus since; and the editor goes with it.
+                        ViewGroup there = (ViewGroup) mTextEdit.getParent();
+                        InputMethodManager its = (InputMethodManager) there.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                        its.hideSoftInputFromWindow(there.getWindowToken(), 0);
+                        imm.hideSoftInputFromWindow(mSurface.getWindowToken(), 0);
+                        there.removeView(mTextEdit);
+                        mTextEdit = null;
+                        there.requestFocus();
                     }
                 }
                 break;

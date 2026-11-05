@@ -1,6 +1,7 @@
 #include "Window.h"
 #include "GraphicCache.h"
 #include "Pad.h"
+#include "SecondScreen.h"
 #include "TextInput.h"
 #include "Touch.h"
 #ifdef __IPHONEOS__
@@ -167,6 +168,7 @@ void Window::Fit(int outer_w, int outer_h, SDL_Rect& out) const {
 }
 
 void Window::Present() {
+    SecondScreen::Present(renderer);
     SDL_SetRenderTarget(renderer, nullptr);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);

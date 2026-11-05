@@ -33,6 +33,7 @@
 #include "hal/Window.h"
 #include "ecs/Simulation.h"
 #include "rendering/Renderer.h"
+#include "rendering/BottomPanel.h"
 #include "rendering/EntityRenderer.h"
 #include "rendering/Alerts.h"
 #include "rendering/TerrainRenderer.h"
@@ -1913,6 +1914,8 @@ int main(int argc, char* argv[]) {
     // The in-game interface art. Not fatal if absent -- the HUD falls back to
     // plain panels.
     HAL::GraphicCache::Get().OpenInterface("../assets/original/Data/interfac.drs");
+    // The second screen's picture, on a device that has one (hal/SecondScreen).
+    Rendering::BottomPanel::Install();
     // Ground tiles: 21 sets of interchangeable 97x49 diamonds.
     HAL::GraphicCache::Get().OpenTerrain("../assets/original/Data/terrain.drs");
     // Where each player's colour ramp starts in the palette, from the dat.

@@ -25,6 +25,8 @@ import org.libsdl.app.SDLActivity;
 public class GameActivity extends SDLActivity implements InputManager.InputDeviceListener {
     private static native void nativeMouseAttached(boolean attached);
 
+    private final BottomScreen bottomScreen = new BottomScreen();
+
     @Override
     protected String[] getLibraries() {
         return new String[] { "SDL2", "main" };
@@ -53,10 +55,12 @@ public class GameActivity extends SDLActivity implements InputManager.InputDevic
         super.onResume();
         inputs().registerInputDeviceListener(this, null);
         reportMouse();
+        bottomScreen.show(this);
     }
 
     @Override
     protected void onPause() {
+        bottomScreen.hide();
         inputs().unregisterInputDeviceListener(this);
         super.onPause();
     }

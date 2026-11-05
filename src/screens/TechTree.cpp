@@ -12,6 +12,7 @@
 #include "ecs/Players.h"
 #include "hal/Audio.h"
 #include "hal/GraphicCache.h"
+#include "hal/Pad.h"
 #include "rendering/Text.h"
 
 #include <algorithm>
@@ -109,6 +110,7 @@ struct State {
     bool list_open = false;
     uint32_t key_tick = 0;
     bool key_scrolling = false;
+    uint32_t pad_tick = 0;   // when the controller's stick last scrolled
 };
 
 State& S() {
@@ -569,6 +571,11 @@ Result HandleEvent(const SDL_Event& e, int w, int h) {
     State& s = S();
     if (!s.open) return Result::Ignored;
     if (e.type == SDL_MOUSEMOTION) {
+        // Held down away from the buttons, the mouse, or a finger, drags the
+        // tree along.
+        if (s.held && s.pressed == -1 && !s.list_open) {
+            ScrollTo(s.scroll_x + e.motion.x - s.mx, s.scroll_y + e.motion.y - s.my, w, h);
+        }
         s.mx = e.motion.x;
         s.my = e.motion.y;
         return Result::Taken;
@@ -663,6 +670,20 @@ void Draw(SDL_Renderer* r, const entt::registry* registry, int w, int h) {
             s.key_scrolling = true;
             s.key_tick = now;
             if (step > 0) Scroll(dir < 0 ? step : -step, w, h);
+        }
+    }
+    // The controller's right stick scrolls as the arrow keys do, as far as it
+    // leans (hal/Pad).
+    {
+        float lean_x = 0.0f, lean_y = 0.0f;
+        HAL::Pad::Scroll(lean_x, lean_y);
+        const uint32_t now = SDL_GetTicks();
+        const float seconds = std::min(0.1f, static_cast<float>(now - s.pad_tick) / 1000.0f);
+        s.pad_tick = now;
+        constexpr float kPadPixelsPerSecond = 32.0f * 1000.0f / 27.0f;
+        if (lean_x != 0.0f || lean_y != 0.0f) {
+            ScrollTo(s.scroll_x - static_cast<int>(lean_x * kPadPixelsPerSecond * seconds),
+                     s.scroll_y - static_cast<int>(lean_y * kPadPixelsPerSecond * seconds), w, h);
         }
     }
     ScrollTo(s.scroll_x, s.scroll_y, w, h);

@@ -24,13 +24,13 @@
 #include "hal/Audio.h"
 #include "hal/Crt.h"
 #include "hal/GraphicCache.h"
+#include "hal/TextInput.h"
 #include "hal/Window.h"
 #include "rendering/Messages.h"
 #include "rendering/UIRenderer.h"
 #include "rendering/Text.h"
 
 #include <algorithm>
-#include <cmath>
 #include <filesystem>
 #include <cstdio>
 #include <string>
@@ -1111,23 +1111,49 @@ void EnterSpaceOf(Dialog dialog) {
 SDL_Event InSpace(const SDL_Event& event) {
     SDL_Event e = event;
     if (g_scale == 1.0f) return e;
-    const auto in = [](Sint32 v) { return static_cast<Sint32>(std::floor(static_cast<float>(v) / g_scale)); };
+    const auto in_x = [](Sint32 v) { return static_cast<Sint32>(static_cast<int64_t>(v) * g_w / g_frame_w); };
+    const auto in_y = [](Sint32 v) { return static_cast<Sint32>(static_cast<int64_t>(v) * g_h / g_frame_h); };
     switch (e.type) {
     case SDL_MOUSEMOTION:
-        e.motion.x = in(e.motion.x);
-        e.motion.y = in(e.motion.y);
-        e.motion.xrel = in(e.motion.xrel);
-        e.motion.yrel = in(e.motion.yrel);
+        e.motion.x = in_x(e.motion.x);
+        e.motion.y = in_y(e.motion.y);
+        e.motion.xrel = in_x(e.motion.xrel);
+        e.motion.yrel = in_y(e.motion.yrel);
         break;
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
-        e.button.x = in(e.button.x);
-        e.button.y = in(e.button.y);
+        e.button.x = in_x(e.button.x);
+        e.button.y = in_y(e.button.y);
         break;
     default:
         break;
     }
     return e;
+}
+
+// The open dialog drawn at its own size, before it is scaled up to the frame.
+SDL_Texture* g_space = nullptr;
+
+// What has been drawn into a cleared texture with SDL's blending holds its
+// colours already multiplied by their alpha, and is laid over the frame so.
+SDL_BlendMode Premultiplied() {
+    return SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ONE, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                      SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ONE,
+                                      SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
+}
+
+SDL_Texture* SpaceTexture(SDL_Renderer* r) {
+    int w = 0, h = 0;
+    if (g_space != nullptr && SDL_QueryTexture(g_space, nullptr, nullptr, &w, &h) == 0 && w == g_w && h == g_h) {
+        return g_space;
+    }
+    if (g_space != nullptr) SDL_DestroyTexture(g_space);
+    g_space = SDL_CreateTexture(r, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, g_w, g_h);
+    if (g_space != nullptr) {
+        SDL_SetTextureBlendMode(g_space, Premultiplied());
+        SDL_SetTextureScaleMode(g_space, SDL_ScaleModeLinear);
+    }
+    return g_space;
 }
 
 } // namespace
@@ -1424,15 +1450,29 @@ void DrawInSpace(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
 
 } // namespace
 
+// A dialog grown to fill more of the frame is drawn at its own size and then
+// scaled up, filtered, as the frame itself is to the screen: the art's
+// dithered shadows blend then, where drawn scaled pixel by pixel they come out
+// uneven.
 void Draw(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
     g_frame_w = w;
     g_frame_h = h;
     EnterSpaceOf(S().dialog);
-    float sx = 1.0f, sy = 1.0f;
-    SDL_RenderGetScale(r, &sx, &sy);
-    SDL_RenderSetScale(r, sx * g_scale, sy * g_scale);
+    SDL_Texture* space = g_scale == 1.0f ? nullptr : SpaceTexture(r);
+    if (space == nullptr) {
+        DrawInSpace(r, sim, w, h);
+        return;
+    }
+    SDL_Texture* frame = SDL_GetRenderTarget(r);
+    SDL_SetRenderTarget(r, space);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 0);
+    SDL_RenderClear(r);
+    HAL::TextInput::SetFieldScale(static_cast<float>(w) / static_cast<float>(g_w));
     DrawInSpace(r, sim, g_w, g_h);
-    SDL_RenderSetScale(r, sx, sy);
+    HAL::TextInput::SetFieldScale(1.0f);
+    SDL_SetRenderTarget(r, frame);
+    const SDL_Rect whole = {0, 0, w, h};
+    SDL_RenderCopy(r, space, nullptr, &whole);
 }
 
 std::string SaveName() { return S().chosen_name; }

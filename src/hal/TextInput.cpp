@@ -19,6 +19,7 @@ namespace {
 struct State {
     Kind wanted = Kind::None;
     SDL_Rect field{0, 0, 0, 0};   // the field being typed into, in the window
+    float field_scale = 1.0f;     // the frame's pixels to one of the fields' space
     bool asked = false;        // the keyboard has been up for this line
     bool fields_due = false;   // the player asked for the keyboard
     bool text_on = false;      // text input is on for what the keyboard gave
@@ -83,18 +84,17 @@ void Want(Kind kind) {
 #endif
 }
 
+void SetFieldScale(float scale) { g.field_scale = scale; }
+
 void At(const SDL_Rect& field) {
-    Window* window = MainWindow();
+    const Window* window = MainWindow();
     if (window == nullptr) return;
-    // A field drawn scaled up, as a dialog grown to fill the frame is
-    // (screens/GameDialogs), is where the scale puts it.
-    float sx = 1.0f, sy = 1.0f;
-    SDL_RenderGetScale(window->GetSDLRenderer(), &sx, &sy);
-    const SDL_Rect drawn = {static_cast<int>(static_cast<float>(field.x) * sx),
-                            static_cast<int>(static_cast<float>(field.y) * sy),
-                            static_cast<int>(static_cast<float>(field.w) * sx),
-                            static_cast<int>(static_cast<float>(field.h) * sy)};
-    SDL_Rect at = window->ToWindow(drawn);
+    const float s = g.field_scale;
+    const SDL_Rect in_frame = {static_cast<int>(static_cast<float>(field.x) * s),
+                               static_cast<int>(static_cast<float>(field.y) * s),
+                               static_cast<int>(static_cast<float>(field.w) * s),
+                               static_cast<int>(static_cast<float>(field.h) * s)};
+    SDL_Rect at = window->ToWindow(in_frame);
     SDL_Rect& last = g.field;
     if (at.x == last.x && at.y == last.y && at.w == last.w && at.h == last.h) return;
     last = at;

@@ -26,6 +26,9 @@ void Want(Kind kind);
 // keyboard keeps it in view above itself, and a desktop's input method puts
 // its window beside it.
 void At(const SDL_Rect& field);
+// The fields that follow are drawn in a space `scale` times smaller than the
+// frame (screens/GameDialogs), 1 for the frame itself.
+void SetFieldScale(float scale);
 
 // A press at a point of the window: on the field being typed into, a phone's
 // keyboard comes back up if it was put away.

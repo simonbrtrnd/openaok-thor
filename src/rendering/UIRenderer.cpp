@@ -2766,22 +2766,96 @@ namespace {
 
 // The second screen's layout (the AYN Thor's lower screen, 1240x1080): a
 // 16-pixel margin and gutter round two columns, 776 and 416 pixels wide, and
-// what of the 1024x768 interface each place shows, three times its size.
+// what of the 1024x768 interface each place shows. The selected object's card
+// is the parchment's left 259 columns, down to the frame's bottom, three
+// times their size; a group's cards, or a queue of more than one kind, the
+// whole parchment twice its size, which fills the column's width.
 constexpr SDL_Rect kSecondReadout = {16, 16, 1208, 75};
-constexpr SDL_Rect kSecondCard = {16, 107, 776, 330};
+constexpr SDL_Rect kSecondCard = {16, 107, 776, 456};
 constexpr SDL_Point kSecondAge = {808, 107};
-constexpr SDL_Rect kSecondMinimap = {808, 453, 416, 211};
+constexpr SDL_Rect kSecondMinimap = {808, 579, 416, 211};
 constexpr SDL_Rect kArtReadout = {0, 0, 392, 25};
-constexpr SDL_Rect kArtCard = {289, 616, 259, 110};
+constexpr SDL_Rect kArtCard = {289, 616, 259, 152};
+constexpr SDL_Rect kArtParchment = {289, 616, 388, 152};
 constexpr SDL_Rect kArtMinimap = {690, 600, 322, 163};
 // The plain stone behind the command grid, which the screen is paved with,
 // twice its size.
 constexpr SDL_Rect kArtStone = {45, 628, 190, 120};
 constexpr int kStoneScale = 2;
 constexpr int kSecondTextPercent = 300;
+constexpr int kSecondLabelPercent = 250;
+
+// The command grid: each button's icon and the inner pixel of its bevel, 38
+// pixels square, four times their size, the cells touching.
+constexpr SDL_Rect kSecondGrid = {16, 579, 776, 472};
+constexpr int kSecondGridInset = 8;
+constexpr int kSecondButtonArt = 38;
+constexpr int kSecondButtonScale = 4;
+constexpr int kSecondGridPitch = kSecondButtonArt * kSecondButtonScale;
+// The top bar's buttons, then the mini-map's, as tiles two by two in the
+// right column, and which button each tile is.
+constexpr SDL_Point kSecondBarTiles = {808, 159};
+constexpr SDL_Point kSecondMinimapTiles = {808, 806};
+constexpr int kSecondTileW = 200;
+constexpr int kSecondBarTileH = 194;
+constexpr int kSecondMinimapTileH = 114;
+constexpr int kSecondGap = 16;
+constexpr int kSecondBarTile[4] = {kObjectives, kTechTree, kDiplomacy, kGameMenu};
+constexpr int kSecondMinimapTile[4] = {kAdvancedCommands, kStatistics, kEconomicMode, kSignalAllies};
+// The help strings the top bar's buttons are named by, in their order.
+constexpr int kBarHelpString[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
 
 // The 1024x768 interface, drawn for the second screen to take its parts from.
 SDL_Texture* g_second_hud = nullptr;
+
+SDL_Rect SecondCell(int slot) {
+    const int col = (slot - 1) % 5;
+    const int row = (slot - 1) / 5;
+    return SDL_Rect{kSecondGrid.x + kSecondGridInset + col * kSecondGridPitch,
+                    kSecondGrid.y + kSecondGridInset + row * kSecondGridPitch,
+                    kSecondGridPitch, kSecondGridPitch};
+}
+
+SDL_Rect SecondTile(SDL_Point origin, int tile_h, int i) {
+    return SDL_Rect{origin.x + (i % 2) * (kSecondTileW + kSecondGap),
+                    origin.y + (i / 2) * (tile_h + kSecondGap), kSecondTileW, tile_h};
+}
+
+// A help string's bold title: "<b>Objectives<b> \n..." names the button
+// Objectives.
+std::string HelpTitle(int string_id) {
+    const std::string& help = Core::Strings::Get(string_id);
+    const size_t start = help.find("<b>");
+    if (start == std::string::npos) return help;
+    const size_t end = help.find("<b>", start + 3);
+    std::string title = help.substr(start + 3, end == std::string::npos ? std::string::npos : end - start - 3);
+    while (!title.empty() && title.back() == ' ') title.pop_back();
+    while (!title.empty() && title.front() == ' ') title.erase(title.begin());
+    return title;
+}
+
+// A tile's dark ground and its border, gold while the button is on.
+void SecondTileBox(SDL_Renderer* sdl_r, const SDL_Rect& r, bool lit) {
+    Fill(sdl_r, r.x, r.y, r.w, r.h, SDL_Color{0, 0, 0, 115});
+    if (lit) {
+        SDL_SetRenderDrawColor(sdl_r, 236, 196, 92, 255);
+    } else {
+        SDL_SetRenderDrawColor(sdl_r, 140, 126, 92, 255);
+    }
+    for (int i = 0; i < (lit ? 4 : 2); ++i) {
+        const SDL_Rect edge = {r.x + i, r.y + i, r.w - 2 * i, r.h - 2 * i};
+        SDL_RenderDrawRect(sdl_r, &edge);
+    }
+}
+
+// The 1024x768 frame's commands, their layout looked up for that frame.
+int SecondCommands(ECS::Simulation& sim, UIRenderer::Command* out) {
+    const Frame frame = CurrentFrame();
+    SetFrame(1024, 768);
+    const int n = UIRenderer::BuildCommands(sim, 1024, 768, out, UIRenderer::kCommandSlots);
+    SetFrame(frame.w, frame.h);
+    return n;
+}
 
 SDL_FRect Mapped(const SDL_FRect& r, const SDL_Rect& from, const SDL_Rect& to) {
     const float sx = static_cast<float>(to.w) / static_cast<float>(from.w);
@@ -2824,8 +2898,14 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     SDL_SetRenderDrawColor(sdl_r, 0, 0, 0, 0);
     SDL_RenderClear(sdl_r);
     DrawArtPart(sdl_r, sim, kHudW, kHudH, false);
+    DrawCommandPanel(sdl_r, sim, kHudW, kHudH);
+    Command commands[kCommandSlots];
+    const int command_count = BuildCommands(sim, kHudW, kHudH, commands, kCommandSlots);
     SelectionCard probe[2];
-    if (BuildSelectionCards(sim, kHudW, kHudH, probe, 2) >= 2) {
+    QueueSlot queue[2];
+    const bool group = BuildSelectionCards(sim, kHudW, kHudH, probe, 2) >= 2;
+    const bool whole_parchment = group || BuildQueueSlots(sim, kHudW, kHudH, queue, 2) >= 2;
+    if (group) {
         DrawSelectionCards(sdl_r, sim, kHudW, kHudH);
     } else {
         DrawUnitPanel(sdl_r, sim, kHudW, kHudH);
@@ -2835,6 +2915,7 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     DrawFrame(sdl_r, kFoodIconSlp, 0, layout.food_icon.x, layout.food_icon.y);
     DrawTopBar(sdl_r, sim, layout);
     const SDL_FRect well = MinimapRect(kHudW, kHudH);
+    const uint32_t minimap_slp = layout.minimap_slp;
     const HAL::GraphicAtlas* art =
         HAL::GraphicCache::Get().GetInterfaceAtlas(HudArt(layout, LocalCiv(sim.GetRegistry())));
     SetFrame(frame.w, frame.h);
@@ -2842,10 +2923,64 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
 
     PaveWithStone(sdl_r, art, w, h);
     SDL_RenderCopy(sdl_r, g_second_hud, &kArtReadout, &kSecondReadout);
-    SDL_RenderCopy(sdl_r, g_second_hud, &kArtCard, &kSecondCard);
+    if (whole_parchment) {
+        const int h2 = kArtParchment.h * 2;
+        const SDL_Rect to = {kSecondCard.x, kSecondCard.y + (kSecondCard.h - h2) / 2, kSecondCard.w, h2};
+        SDL_RenderCopy(sdl_r, g_second_hud, &kArtParchment, &to);
+    } else {
+        SDL_RenderCopy(sdl_r, g_second_hud, &kArtCard, &kSecondCard);
+    }
     SDL_RenderCopy(sdl_r, g_second_hud, &kArtMinimap, &kSecondMinimap);
     DrawMinimapIn(sim, renderer, sdl_r, Mapped(well, kArtMinimap, kSecondMinimap),
                   SDL_FRect{0.0f, 0.0f, static_cast<float>(frame.w), static_cast<float>(frame.h)});
+
+    // The command grid: an empty slot dark, a button its own art.
+    SecondTileBox(sdl_r, kSecondGrid, false);
+    for (int slot = 1; slot <= kCommandSlots; ++slot) {
+        const SDL_Rect cell = SecondCell(slot);
+        Fill(sdl_r, cell.x + 4, cell.y + 4, cell.w - 8, cell.h - 8, SDL_Color{0, 0, 0, 90});
+    }
+    for (int i = 0; i < command_count; ++i) {
+        const Command& cmd = commands[i];
+        if (cmd.slot < 1 || cmd.slot > kCommandSlots) continue;
+        const SDL_Rect from = {static_cast<int>(cmd.rect.x) + 1, static_cast<int>(cmd.rect.y) + 1,
+                               kSecondButtonArt, kSecondButtonArt};
+        const SDL_Rect to = SecondCell(cmd.slot);
+        SDL_RenderCopy(sdl_r, g_second_hud, &from, &to);
+    }
+
+    // The top bar's buttons, named, each name as large as its tile has room
+    // for, and the mini-map's, lit while on.
+    for (int i = 0; i < 4; ++i) {
+        const SDL_Rect r = SecondTile(kSecondBarTiles, kSecondBarTileH, i);
+        const int button = kSecondBarTile[i];
+        SecondTileBox(sdl_r, r, false);
+        const std::string label = HelpTitle(kBarHelpString[button]);
+        int font = Text::Scaled(Text::kGeorgia9B, kSecondLabelPercent);
+        for (int percent = kSecondLabelPercent; percent > 100 && Text::Width(font, label) > r.w - 16;
+             percent -= 25) {
+            font = Text::Scaled(Text::kGeorgia9B, percent - 25);
+        }
+        // The button and its name, centred in the tile together.
+        constexpr int kIconW = 150, kIconH = 51, kSpace = 14;
+        const int top = r.y + (r.h - kIconH - kSpace - Text::Height(font)) / 2;
+        DrawIcon(sdl_r, kBarButtonSlp, kBarButtonFrame[button],
+                 SDL_Rect{r.x + (r.w - kIconW) / 2, top, kIconW, kIconH}, 1, 255);
+        Text::DrawShadowed(sdl_r, font, r.x + (r.w - Text::Width(font, label)) / 2,
+                           top + kIconH + kSpace, label, kWhite, kBlack);
+    }
+    const Hud& hud = HudState();
+    for (int i = 0; i < 4; ++i) {
+        const SDL_Rect r = SecondTile(kSecondMinimapTiles, kSecondMinimapTileH, i);
+        const int button = kSecondMinimapTile[i];
+        const bool lit = (button == kAdvancedCommands && hud.advanced) ||
+                         (button == kStatistics && hud.statistics) ||
+                         (button == kEconomicMode && hud.minimap_mode == 2);
+        SecondTileBox(sdl_r, r, lit);
+        constexpr int kIcon = 96;
+        DrawIcon(sdl_r, minimap_slp, kMinimapButtonFrame[button] + (lit ? 1 : 0),
+                 SDL_Rect{r.x + (r.w - kIcon) / 2, r.y + (r.h - kIcon) / 2, kIcon, kIcon}, 1, 255);
+    }
 
     auto& registry = sim.GetRegistry();
     const int age_tech = ECS::Techs::AgeTech(registry, LocalViewer(),
@@ -2855,6 +2990,44 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
         Text::DrawShadowed(sdl_r, Text::Scaled(Text::kGeorgia9B, kSecondTextPercent),
                            kSecondAge.x, kSecondAge.y, age, kWhite, kBlack);
     }
+}
+
+UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
+    using Kind = SecondScreenTarget::Kind;
+    for (int slot = 1; slot <= kCommandSlots; ++slot) {
+        if (Inside(SecondCell(slot), x, y)) return SecondScreenTarget{Kind::Command, slot};
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (Inside(SecondTile(kSecondBarTiles, kSecondBarTileH, i), x, y)) {
+            return SecondScreenTarget{Kind::BarButton, kSecondBarTile[i]};
+        }
+        if (Inside(SecondTile(kSecondMinimapTiles, kSecondMinimapTileH, i), x, y)) {
+            return SecondScreenTarget{Kind::MinimapButton, kSecondMinimapTile[i]};
+        }
+    }
+    if (Inside(kSecondMinimap, x, y)) return SecondScreenTarget{Kind::Minimap, -1};
+    return SecondScreenTarget{};
+}
+
+bool UIRenderer::SecondScreenCommand(ECS::Simulation& sim, int slot, Command& out) {
+    Command commands[kCommandSlots];
+    const int n = SecondCommands(sim, commands);
+    for (int i = 0; i < n; ++i) {
+        if (commands[i].slot != slot) continue;
+        out = commands[i];
+        return true;
+    }
+    return false;
+}
+
+bool UIRenderer::SecondScreenUnproject(ECS::Simulation& sim, int x, int y, float& gx, float& gy) {
+    const SDL_Rect& m = LayoutForHeight(768).minimap;
+    const SDL_FRect well = Mapped(SDL_FRect{static_cast<float>(m.x), static_cast<float>(m.y),
+                                            static_cast<float>(m.w), static_cast<float>(m.h)},
+                                  kArtMinimap, kSecondMinimap);
+    auto& grid = sim.GetGrid();
+    return MinimapUnproject(well, static_cast<float>(x), static_cast<float>(y),
+                            grid.GetWidth(), grid.GetHeight(), gx, gy);
 }
 
 void UIRenderer::DrawCursor(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r) {

@@ -1,5 +1,6 @@
 #include "InputManager.h"
 #include "hal/Pad.h"
+#include "hal/SecondScreen.h"
 #include "hal/Touch.h"
 #include "hal/Window.h"
 #include "audio/Voices.h"
@@ -129,12 +130,97 @@ void InputManager::MinimapJump(Rendering::Renderer& renderer, ECS::Simulation& s
                                                  gx, gy)) {
         return;  // inside the well, but off the map diamond
     }
+    CentreCamera(renderer, gx, gy);
+}
+
+void InputManager::CentreCamera(Rendering::Renderer& renderer, float gx, float gy) {
     const auto screen_pos = IsometricMath::WorldToScreen(Fixed32(gx), Fixed32(gy));
     renderer.target_camera_x = screen_pos.x - (last_win_w / 2.0f) / renderer.target_camera_zoom;
     renderer.target_camera_y = screen_pos.y - (last_win_h / 2.0f) / renderer.target_camera_zoom;
     // A minimap jump is a teleport: it skips the camera smoothing.
     renderer.camera_x = renderer.target_camera_x;
     renderer.camera_y = renderer.target_camera_y;
+}
+
+void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer, bool accept) {
+    using Target = Rendering::UIRenderer::SecondScreenTarget;
+    using Touch = HAL::SecondScreen::Touch;
+    static std::vector<Touch> touches;
+    touches.clear();
+    HAL::SecondScreen::TakeTouches(touches);
+    if (!accept) {
+        second_pressed = Target{};
+        second_minimap_drag = false;
+        return;
+    }
+    for (const Touch& touch : touches) {
+        const int x = static_cast<int>(touch.x);
+        const int y = static_cast<int>(touch.y);
+        const Target target = Rendering::UIRenderer::SecondScreenTargetAt(x, y);
+        float gx = 0.0f, gy = 0.0f;
+        switch (touch.kind) {
+        case Touch::Down:
+            second_pressed = target;
+            // A finger on the mini-map moves the view as it goes, unless a
+            // flare waits to be pointed there.
+            second_minimap_drag = target.kind == Target::Kind::Minimap &&
+                                  pending_order != PendingOrder::Flare;
+            [[fallthrough]];
+        case Touch::Move:
+            if (second_minimap_drag &&
+                Rendering::UIRenderer::SecondScreenUnproject(sim, x, y, gx, gy)) {
+                CentreCamera(renderer, gx, gy);
+            }
+            break;
+        case Touch::Up:
+            if (!second_minimap_drag && target == second_pressed) {
+                PressSecondScreen(sim, renderer, target, x, y);
+            }
+            second_pressed = Target{};
+            second_minimap_drag = false;
+            break;
+        }
+    }
+}
+
+void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer,
+                                     const Rendering::UIRenderer::SecondScreenTarget& target,
+                                     int x, int y) {
+    using Kind = Rendering::UIRenderer::SecondScreenTarget::Kind;
+    switch (target.kind) {
+    case Kind::Command: {
+        Rendering::UIRenderer::Command cmd;
+        if (Rendering::UIRenderer::SecondScreenCommand(sim, target.index, cmd)) {
+            // Shift, the controller's L1, asks for five.
+            RunCommand(sim, cmd, (SDL_GetModState() & KMOD_SHIFT) ? 5 : 1);
+        }
+        break;
+    }
+    case Kind::BarButton:
+        Rendering::UIRenderer::RequestDialog(target.index);
+        break;
+    case Kind::MinimapButton:
+        // The economic mode's button turns it off again.
+        if (target.index == Rendering::kSignalAllies) {
+            pending_order = PendingOrder::Flare;
+        } else if (target.index == Rendering::kEconomicMode && Rendering::UIRenderer::MinimapMode() == 2) {
+            Rendering::UIRenderer::ActivateMinimapButton(Rendering::kNormalMode);
+        } else if (Rendering::UIRenderer::ActivateMinimapButton(target.index)) {
+            NextIdleVillager(sim, renderer);
+        }
+        break;
+    case Kind::Minimap: {
+        float gx = 0.0f, gy = 0.0f;
+        if (pending_order == PendingOrder::Flare &&
+            Rendering::UIRenderer::SecondScreenUnproject(sim, x, y, gx, gy)) {
+            GivePendingOrder(sim, gx, gy);
+        }
+        break;
+    }
+    case Kind::None:
+        break;
+    }
+    HAL::SecondScreen::Invalidate();
 }
 
 void InputManager::GivePendingOrder(ECS::Simulation& sim, float x, float y) {

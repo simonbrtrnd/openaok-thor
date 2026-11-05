@@ -45,6 +45,10 @@ public:
     static float PanPerSecond(int scroll_speed);
     // Once a frame with the world at hand: the cursor and the help.
     void Hover(ECS::Simulation& sim, Rendering::Renderer& renderer) { UpdateIntent(sim, renderer); }
+    // Once a frame with the world at hand: the fingers on the second screen
+    // (hal/SecondScreen), on its buttons and its mini-map. Taken and dropped
+    // while `accept` is false, as when a dialog is open.
+    void HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer, bool accept);
     // The next idle military unit, as the idle villager button finds villagers:
     // selected, and the view on it.
     void NextIdleMilitary(ECS::Simulation& sim, Rendering::Renderer& renderer);
@@ -98,6 +102,16 @@ private:
     // inside the minimap well. Used by the click and the drag that follows it,
     // so holding the button scrubs the view.
     void MinimapJump(Rendering::Renderer& renderer, ECS::Simulation& sim, int mx, int my);
+    // Centre the camera on a world point at once, as a jump on the minimap does.
+    void CentreCamera(Rendering::Renderer& renderer, float gx, float gy);
+
+    // The finger on the second screen: what it went down on, and whether it
+    // is scrubbing the mini-map.
+    Rendering::UIRenderer::SecondScreenTarget second_pressed;
+    bool second_minimap_drag = false;
+    // A finger lifted where it went down on the second screen.
+    void PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer,
+                           const Rendering::UIRenderer::SecondScreenTarget& target, int x, int y);
 
     bool is_dragging = false;
     bool minimap_dragging = false;

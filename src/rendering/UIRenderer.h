@@ -208,6 +208,24 @@ public:
     static int BuildCommands(ECS::Simulation& sim, int win_w, int win_h,
                              Command* out, int max_out);
 
+    // What a point of the second screen (DrawSecondScreen) is on: a command
+    // button, by its slot from 1 to 15; a top bar or mini-map button, by its
+    // number (rendering/HudLayout.h); or the mini-map.
+    struct SecondScreenTarget {
+        enum class Kind { None, Command, BarButton, MinimapButton, Minimap };
+        Kind kind = Kind::None;
+        int index = -1;
+        bool operator==(const SecondScreenTarget& other) const {
+            return kind == other.kind && index == other.index;
+        }
+    };
+    static SecondScreenTarget SecondScreenTargetAt(int x, int y);
+    // The command in a slot of the second screen's grid; false when it is empty.
+    static bool SecondScreenCommand(ECS::Simulation& sim, int slot, Command& out);
+    // The map tile under a point of the second screen's mini-map; false off
+    // the map's diamond.
+    static bool SecondScreenUnproject(ECS::Simulation& sim, int x, int y, float& gx, float& gy);
+
     // One item in the selected building's queue, as drawn: units of one kind
     // queued one after another share a button, with their count on it.
     struct QueueSlot {

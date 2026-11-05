@@ -1431,6 +1431,8 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
             Core::InputManager::Get().Update(renderer, dt, window.GetWidth(), window.GetHeight());
         }
         Core::InputManager::Get().Hover(*sim, renderer);
+        Core::InputManager::Get().HandleSecondScreen(
+            *sim, renderer, GameDialogs::Current() == GameDialogs::Dialog::None);
         if (watches_selection) {
             std::vector<entt::entity> selected;
             auto view = sim->GetRegistry().view<ECS::Components::Selectable>();

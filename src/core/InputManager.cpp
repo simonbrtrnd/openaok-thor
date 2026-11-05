@@ -1133,10 +1133,12 @@ void InputManager::Update(Rendering::Renderer& renderer, float dt_seconds, int w
         if (const HAL::Window* window = HAL::MainWindow()) {
             window->ToGame(static_cast<int>(pinch_x), static_cast<int>(pinch_y), gx, gy);
         }
-        renderer.ZoomBy(pinch, static_cast<float>(gx), static_cast<float>(gy), true);
+        if (renderer.ZoomBy(pinch, static_cast<float>(gx), static_cast<float>(gy), true)) HAL::Pad::Rumble();
     }
     if (const float lean = HAL::Pad::Zoom(); lean != 0.0f) {
-        renderer.ZoomBy(std::pow(kStickZoomPerSecond, lean * dt_seconds), win_w / 2.0f, win_h / 2.0f, true);
+        if (renderer.ZoomBy(std::pow(kStickZoomPerSecond, lean * dt_seconds), win_w / 2.0f, win_h / 2.0f, true)) {
+            HAL::Pad::Rumble();
+        }
     }
     
     // Pan speed is in screen pixels per second, so panning feels the same at

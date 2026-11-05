@@ -59,15 +59,29 @@ public:
 
     // How far the view may zoom out and in, and the step a wheel notch or a
     // key press takes. The original has no zoom; it is ours. In as far as
-    // twice the art's size, for a handheld's small screen.
+    // three times the art's size, for a handheld's small screen.
     static constexpr float kZoomOut = 0.4f;
-    static constexpr float kZoomIn = 2.0f;
+    static constexpr float kZoomIn = 3.0f;
     static constexpr float kZoomStep = 1.1f;
+    // The zooms the view stops on as it zooms through them. Zooming as it is
+    // held, by a pinch or a stick, it leaves one only once pushed kZoomDetent
+    // past it, within kZoomPushMs of the last push.
+    static constexpr float kZoomMagnets[3] = {1.0f, 2.0f, 3.0f};
+    static constexpr float kZoomDetent = 1.15f;
+    static constexpr uint32_t kZoomPushMs = 400;
+    // How far a held zoom has pushed past the magnet it rests on, and when
+    // the zoom was last asked to change (UIRenderer shows it a moment).
+    float zoom_push = 1.0f;
+    uint32_t zoom_asked_ms = 0;
+
+    // Whether `zoom` is one of kZoomMagnets.
+    static bool ZoomMagnet(float zoom);
 
     // Zooms by `factor` (above 1 in, below out), keeping the frame point
-    // (x, y) where it is, within kZoomOut..kZoomIn: eased there, or at once
-    // for a pinch or a stick that zooms as it is held.
-    void ZoomBy(float factor, float x, float y, bool at_once);
+    // (x, y) where it is, within kZoomOut..kZoomIn and stopping on the
+    // magnets: eased there, or at once for a pinch or a stick that zooms as
+    // it is held. True when it has just stopped on a magnet.
+    bool ZoomBy(float factor, float x, float y, bool at_once);
 };
 
 // Draws at `zoom` times over the whole of the target being drawn to: the

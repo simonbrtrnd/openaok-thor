@@ -17,6 +17,7 @@
 #include <iostream>
 #include <cstdlib>
 #include <algorithm>
+#include <iterator>
 #include <cmath>
 #include <chrono>
 
@@ -70,10 +71,33 @@ void SetZoom(SDL_Renderer* sdl_r, float zoom) {
     SDL_RenderSetViewport(sdl_r, &whole);
 }
 
-void Renderer::ZoomBy(float factor, float x, float y, bool at_once) {
+bool Renderer::ZoomMagnet(float zoom) {
+    return std::find(std::begin(kZoomMagnets), std::end(kZoomMagnets), zoom) != std::end(kZoomMagnets);
+}
+
+bool Renderer::ZoomBy(float factor, float x, float y, bool at_once) {
     const float from = target_camera_zoom;
-    const float to = std::clamp(from * factor, kZoomOut, kZoomIn);
-    if (to == from) return;
+    const uint32_t now = SDL_GetTicks();
+    if (now - zoom_asked_ms > kZoomPushMs) zoom_push = 1.0f;
+    zoom_asked_ms = now;
+    // Resting on a magnet, a held zoom builds up its push until it is enough
+    // to leave.
+    if (at_once && ZoomMagnet(from)) {
+        zoom_push *= factor;
+        if (zoom_push < kZoomDetent && zoom_push > 1.0f / kZoomDetent) return false;
+        factor = zoom_push;
+    }
+    zoom_push = 1.0f;
+    float to = std::clamp(from * factor, kZoomOut, kZoomIn);
+    bool stopped = false;
+    for (const float magnet : kZoomMagnets) {
+        if ((from < magnet && to >= magnet) || (from > magnet && to <= magnet)) {
+            to = magnet;
+            stopped = true;
+            break;
+        }
+    }
+    if (to == from) return false;
     // The world point under (x, y) stays under it.
     target_camera_x += x / from - x / to;
     target_camera_y += y / from - y / to;
@@ -83,6 +107,7 @@ void Renderer::ZoomBy(float factor, float x, float y, bool at_once) {
         camera_y += y / camera_zoom - y / to;
         camera_zoom = to;
     }
+    return stopped;
 }
 
 void Renderer::Render(ECS::Simulation& sim, HAL::Window& window, float alpha) {

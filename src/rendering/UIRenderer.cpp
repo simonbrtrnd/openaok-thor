@@ -2842,9 +2842,30 @@ void DrawPart(SDL_Renderer* sdl_r, const UIRenderer::HudSpace& space, int win_w,
 
 } // namespace
 
+namespace {
+
+// The zoom, a moment after it is asked to change: its percentage over the top
+// of the view, gold while it rests on one of its magnets.
+constexpr uint32_t kZoomReadoutMs = 1200;
+
+void DrawZoomReadout(const Renderer& renderer, SDL_Renderer* sdl_r, int win_w, int win_h) {
+    if (renderer.zoom_asked_ms == 0 || SDL_GetTicks() - renderer.zoom_asked_ms > kZoomReadoutMs) return;
+    const float zoom = renderer.target_camera_zoom;
+    char text[16];
+    std::snprintf(text, sizeof(text), "%d%%", static_cast<int>(std::lround(zoom * 100.0f)));
+    const SDL_Rect view = UIRenderer::ViewRect(win_w, win_h);
+    const int font = Text::kBlackletter21B;
+    const SDL_Color colour = Renderer::ZoomMagnet(zoom) ? SDL_Color{236, 196, 92, 255} : kWhite;
+    Text::DrawShadowed(sdl_r, font, view.x + (view.w - Text::Width(font, text)) / 2, view.y + 24, text,
+                       colour, kBlack);
+}
+
+} // namespace
+
 void UIRenderer::DrawInterface(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
                                int win_w, int win_h) {
     SDL_SetRenderDrawBlendMode(sdl_r, SDL_BLENDMODE_BLEND);
+    DrawZoomReadout(renderer, sdl_r, win_w, win_h);
     if (OnSecondScreen()) {
         DrawHelpText(sim, sdl_r, win_w, win_h);
         return;

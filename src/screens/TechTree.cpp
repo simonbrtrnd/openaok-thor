@@ -508,9 +508,11 @@ void DrawCivList(SDL_Renderer* r, const Theme& theme, const Panel& p, int dx, in
 struct Buttons {
     SDL_Rect close, left, right;
 };
+// As tall as the in-game dialogs' buttons and drawn as theirs are, so that
+// the screen's buttons look like theirs.
 Buttons ButtonsFor(int w, int h) {
-    return Buttons{SDL_Rect{w - 105, h - 22, 100, 20}, SDL_Rect{w - 280, h - 22, 50, 20},
-                   SDL_Rect{w - 220, h - 22, 50, 20}};
+    return Buttons{SDL_Rect{w - 125, h - 35, 120, 30}, SDL_Rect{w - 265, h - 35, 60, 30},
+                   SDL_Rect{w - 195, h - 35, 60, 30}};
 }
 
 void DrawButtons(SDL_Renderer* r, const Theme& theme, int w, int h) {
@@ -519,19 +521,15 @@ void DrawButtons(SDL_Renderer* r, const Theme& theme, int w, int h) {
     const SDL_Rect rects[3] = {b.close, b.left, b.right};
     for (int i = 0; i < 3; ++i) {
         const bool down = s.pressed == i && Hit(rects[i], s.mx, s.my);
-        DrawBevel(r, theme, rects[i], down);
+        const bool over = Hit(rects[i], s.mx, s.my);
+        const Button button{rects[i], i == 0 ? Get(kClose) : std::string{}, Text::kBlackletter14};
+        DrawButton(r, theme, button, down ? Screens::State::Pressed
+                                     : over ? Screens::State::Hover : Screens::State::Normal);
+        if (i == 0) continue;
+        // The arrow, centred: frame 1 points left, 0 right.
         const int o = down ? 1 : 0;
-        if (i == 0) {
-            const bool over = Hit(rects[i], s.mx, s.my);
-            DrawTextIn(r, kFontButton, SDL_Rect{rects[i].x + o, rects[i].y + o, rects[i].w, rects[i].h},
-                       Get(kClose), over ? theme.focus : theme.text,
-                       over ? theme.focus_shadow : theme.text_shadow);
-        } else {
-            // The arrow, centred: frame 1 points left, 0 right.
-            const int frame = i == 1 ? 1 : 0;
-            BlitTo(r, kArrows, frame, rects[i].x + rects[i].w / 2 - 9 / 2 + o,
-                   rects[i].y + rects[i].h / 2 - 17 / 2 + o);
-        }
+        BlitTo(r, kArrows, i == 1 ? 1 : 0, rects[i].x + rects[i].w / 2 - 9 / 2 + o,
+               rects[i].y + rects[i].h / 2 - 17 / 2 + o);
     }
 }
 

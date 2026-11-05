@@ -52,7 +52,7 @@ enum Button : int {
 constexpr float kDeadZone = 0.15f;
 // The pointer's speed with the stick pushed all the way, in screen heights a
 // second.
-constexpr float kPointerSpeed = 1.4f;
+constexpr float kPointerSpeed = 1.1f;
 constexpr Uint32 kRumbleMs = 30;
 
 struct State {

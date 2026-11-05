@@ -1,5 +1,6 @@
 #include <iostream>
 #include <algorithm>
+#include <iterator>
 #include <chrono>
 #include <memory>
 #include <thread>
@@ -1369,14 +1370,21 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
                 }
             }
         }
-        // The top bar's buttons open their screens.
-        switch (Rendering::UIRenderer::TakeDialogRequest()) {
-        case 0: GameDialogs::Open(GameDialogs::Dialog::Objectives); break;
-        case 1: GameDialogs::Open(GameDialogs::Dialog::TechTree); break;
-        case 2: GameDialogs::Open(GameDialogs::Dialog::Chat); break;
-        case 3: GameDialogs::Open(GameDialogs::Dialog::Diplomacy); break;
-        case 4: GameDialogs::Open(GameDialogs::Dialog::Menu); break;
-        default: break;
+        // The top bar's buttons open their screens, and close them again: the
+        // second screen's buttons still answer while one is open.
+        {
+            static constexpr GameDialogs::Dialog kBarDialogs[] = {
+                GameDialogs::Dialog::Objectives, GameDialogs::Dialog::TechTree, GameDialogs::Dialog::Chat,
+                GameDialogs::Dialog::Diplomacy, GameDialogs::Dialog::Menu};
+            const int bar = Rendering::UIRenderer::TakeDialogRequest();
+            if (bar >= 0 && bar < static_cast<int>(std::size(kBarDialogs))) {
+                const GameDialogs::Dialog dialog = kBarDialogs[bar];
+                if (GameDialogs::Current() == dialog) {
+                    GameDialogs::Open(GameDialogs::Dialog::None);
+                } else if (GameDialogs::Current() == GameDialogs::Dialog::None) {
+                    GameDialogs::Open(dialog);
+                }
+            }
         }
         switch (GameDialogs::TakeOutcome()) {
         case GameDialogs::Outcome::QuitToMenu: running = false; end = GameEnd::ToMenu; break;

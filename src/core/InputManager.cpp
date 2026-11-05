@@ -149,17 +149,15 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
     touches.clear();
     HAL::SecondScreen::TakeTouches(touches);
     if (!accept) {
-        second_pressed = Target{};
         second_minimap_drag = false;
-        second_help = false;
-        Rendering::UIRenderer::SetSecondScreenFinger(Target{}, false);
-        return;
+        if (second_pressed.kind != Target::Kind::BarButton) second_pressed = Target{};
     }
     const bool had_help = second_help;
     for (const Touch& touch : touches) {
         const int x = static_cast<int>(touch.x);
         const int y = static_cast<int>(touch.y);
-        const Target target = Rendering::UIRenderer::SecondScreenTargetAt(x, y);
+        Target target = Rendering::UIRenderer::SecondScreenTargetAt(x, y);
+        if (!accept && target.kind != Target::Kind::BarButton) target = Target{};
         float gx = 0.0f, gy = 0.0f;
         switch (touch.kind) {
         case Touch::Down:

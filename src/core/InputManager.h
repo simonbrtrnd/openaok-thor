@@ -46,8 +46,9 @@ public:
     // Once a frame with the world at hand: the cursor and the help.
     void Hover(ECS::Simulation& sim, Rendering::Renderer& renderer) { UpdateIntent(sim, renderer); }
     // Once a frame with the world at hand: the fingers on the second screen
-    // (hal/SecondScreen), on its buttons and its mini-map. Taken and dropped
-    // while `accept` is false, as when a dialog is open.
+    // (hal/SecondScreen), on its buttons and its mini-map. While `accept` is
+    // false, as when a dialog is open, only the top bar's buttons answer, so
+    // that each can close the screen it opened.
     void HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer, bool accept);
     // The next idle military unit, as the idle villager button finds villagers:
     // selected, and the view on it.

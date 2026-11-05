@@ -2691,18 +2691,30 @@ int MinimapButtonHelp(const Hud& hud, int button) {
 
 } // namespace
 
+namespace {
+
+// The help's size: the panel's, or, with the interface on a second screen
+// and no panel over the map, the Options' Text size, as the rest of the text
+// over the world.
+float HelpScale(const UIRenderer::HudSpace& panel) {
+    return UIRenderer::OnSecondScreen() ? static_cast<float>(UIRenderer::TextPercent()) / 100.0f : panel.scale;
+}
+
+} // namespace
+
 SDL_Rect UIRenderer::HelpBox(int lines, int win_w, int win_h) {
     const HudSpace panel = PanelSpace(win_w, win_h);
     const HudLayout& layout = Lay(panel.w);
+    const float scale = HelpScale(panel);
     // With no panel, the frame's bottom as far below as the box is from its
     // left edge.
     const int bottom = OnSecondScreen()
-        ? win_h - static_cast<int>(std::lround(layout.help.x * panel.scale))
+        ? win_h - static_cast<int>(std::lround(layout.help.x * scale))
         : static_cast<int>(std::lround(panel.FrameY(static_cast<float>(layout.help.y + layout.help.h))));
-    const int high = lines * static_cast<int>(std::lround(kHelpLinePitch * panel.scale)) +
-                     2 * static_cast<int>(std::lround(kHelpInsetY * panel.scale));
-    return {static_cast<int>(std::lround(layout.help.x * panel.scale)), bottom - high,
-            static_cast<int>(std::lround(layout.help.w * panel.scale)), high};
+    const int high = lines * static_cast<int>(std::lround(kHelpLinePitch * scale)) +
+                     2 * static_cast<int>(std::lround(kHelpInsetY * scale));
+    return {static_cast<int>(std::lround(layout.help.x * scale)), bottom - high,
+            static_cast<int>(std::lround(layout.help.w * scale)), high};
 }
 
 void UIRenderer::DrawHelpText(ECS::Simulation& sim, SDL_Renderer* sdl_r, int win_w, int win_h) {
@@ -2738,15 +2750,16 @@ void UIRenderer::DrawHelpText(ECS::Simulation& sim, SDL_Renderer* sdl_r, int win
 
     // In its box over the map just above the panel, the map darkened through
     // it: white with a shadow, from the box's top down, wrapped to its width,
-    // all at the panel's size.
-    const int font = Text::Scaled(Text::kGeorgia9, static_cast<int>(std::lround(panel.scale * 100.0f)));
-    const int inset_x = static_cast<int>(std::lround(kHelpInsetX * panel.scale));
-    const int inset_y = static_cast<int>(std::lround(kHelpInsetY * panel.scale));
+    // all at the help's size.
+    const float scale = HelpScale(panel);
+    const int font = Text::Scaled(Text::kGeorgia9, static_cast<int>(std::lround(scale * 100.0f)));
+    const int inset_x = static_cast<int>(std::lround(kHelpInsetX * scale));
+    const int inset_y = static_cast<int>(std::lround(kHelpInsetY * scale));
     std::vector<std::vector<Run>> lines;
     LayoutRich(text, font, HelpBox(0, win_w, win_h).w - 2 * inset_x, lines);
     while (!lines.empty() && lines.back().empty()) lines.pop_back();
     const SDL_Rect box = HelpBox(static_cast<int>(lines.size()), win_w, win_h);
-    const int line_h = static_cast<int>(std::lround(kHelpLinePitch * panel.scale));
+    const int line_h = static_cast<int>(std::lround(kHelpLinePitch * scale));
     Darken(sdl_r, box);
     int y = box.y + inset_y;
     for (const auto& line : lines) {

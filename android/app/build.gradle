@@ -22,7 +22,7 @@ android {
     ndkVersion '28.1.13356709'
 
     defaultConfig {
-        applicationId 'org.openaok.game'
+        applicationId 'org.openaok.game.thor'
         minSdk 29
         targetSdk 36
         // Minutes since 1970: a later build always installs over an earlier.

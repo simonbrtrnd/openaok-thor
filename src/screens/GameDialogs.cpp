@@ -29,6 +29,7 @@
 #include "rendering/Text.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <cstdio>
 #include <string>
@@ -1046,13 +1047,88 @@ int TitleOf(Dialog d) {
     }
 }
 
+// The frame the dialogs are drawn in, and the open dialog's space in it: the
+// frame itself, or a smaller one the dialog is laid out in and drawn from,
+// g_scale times larger, so that on a phone's or a handheld's screen it fills
+// more of the frame and its buttons are large enough for a finger.
+int g_frame_w = 1024;
+int g_frame_h = 768;
 int g_w = 1024;
 int g_h = 768;
+float g_scale = 1.0f;
+
+// A dialog grows as far as the frame has room for it, a margin left round it,
+// up to kMostDialogScale. One that covers the frame is laid out for the
+// smallest screen the game offers and grows from there.
+constexpr float kMostDialogScale = 2.5f;
+constexpr float kDialogMargin = 0.92f;
+
+float DialogScale(Dialog dialog, int w, int h) {
+#ifdef __ANDROID__
+    uint32_t sin = 0;
+    switch (dialog) {
+    case Dialog::Menu:
+    case Dialog::Confirm: sin = Sin::kGameMenu; break;
+    case Dialog::Options:
+    case Dialog::SaveGame: sin = Sin::kGameDialog; break;
+    case Dialog::Objectives: sin = Sin::kObjectives; break;
+    case Dialog::Diplomacy: sin = Sin::kDiplomacy; break;
+    case Dialog::Chat: sin = Sin::kChat; break;
+    case Dialog::TechTree:
+    case Dialog::Achievements: {
+        const HAL::ScreenSize& least = HAL::kScreenSizes[0];
+        return std::max(1.0f, std::min(static_cast<float>(w) / static_cast<float>(least.width),
+                                       static_cast<float>(h) / static_cast<float>(least.height)));
+    }
+    default: return 1.0f;
+    }
+    const DialogArt* art = ArtOf(sin);
+    if (art == nullptr) return 1.0f;
+    const float fit = std::min(static_cast<float>(w) * kDialogMargin / static_cast<float>(art->parchment.x),
+                               static_cast<float>(h) * kDialogMargin / static_cast<float>(art->parchment.y));
+    return std::clamp(fit, 1.0f, kMostDialogScale);
+#else
+    (void)dialog;
+    (void)w;
+    (void)h;
+    return 1.0f;
+#endif
+}
+
+void EnterSpaceOf(Dialog dialog) {
+    g_scale = DialogScale(dialog, g_frame_w, g_frame_h);
+    g_w = static_cast<int>(static_cast<float>(g_frame_w) / g_scale);
+    g_h = static_cast<int>(static_cast<float>(g_frame_h) / g_scale);
+}
+
+// A mouse event with its point in the open dialog's space.
+SDL_Event InSpace(const SDL_Event& event) {
+    SDL_Event e = event;
+    if (g_scale == 1.0f) return e;
+    const auto in = [](Sint32 v) { return static_cast<Sint32>(std::floor(static_cast<float>(v) / g_scale)); };
+    switch (e.type) {
+    case SDL_MOUSEMOTION:
+        e.motion.x = in(e.motion.x);
+        e.motion.y = in(e.motion.y);
+        e.motion.xrel = in(e.motion.xrel);
+        e.motion.yrel = in(e.motion.yrel);
+        break;
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP:
+        e.button.x = in(e.button.x);
+        e.button.y = in(e.button.y);
+        break;
+    default:
+        break;
+    }
+    return e;
+}
 
 } // namespace
 
 void Open(Dialog dialog) {
     S().dialog = dialog;
+    EnterSpaceOf(dialog);
     if (dialog == Dialog::SaveGame) OpenSave();
     // The diplomacy choices start from the world as it is, read on the
     // dialog's first frame.
@@ -1102,7 +1178,9 @@ void GameOver(bool won, bool single_player) {
     HAL::Audio::Play(won ? Audio::InterfaceSound::kWon : Audio::InterfaceSound::kLost, 1.0f, 0.0f);
 }
 
-bool HandleEvent(const SDL_Event& e, ECS::Simulation& sim) {
+bool HandleEvent(const SDL_Event& event, ECS::Simulation& sim) {
+    EnterSpaceOf(S().dialog);
+    const SDL_Event e = InSpace(event);
     Shared& s = S();
     if (e.type == SDL_MOUSEMOTION) { s.mx = e.motion.x; s.my = e.motion.y; }
     // A button goes down and up where the mouse is.
@@ -1287,9 +1365,9 @@ bool HandleEvent(const SDL_Event& e, ECS::Simulation& sim) {
     return true;
 }
 
-void Draw(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
-    g_w = w;
-    g_h = h;
+namespace {
+
+void DrawInSpace(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
     Shared& s = S();
     // The message at the end of the game, large, in the middle of the view.
     if (s.over_message >= 0 && s.dialog == Dialog::None) {
@@ -1334,6 +1412,19 @@ void Draw(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
         break;
     default: DrawPlaceholder(r, SinOf(s.dialog), TitleOf(s.dialog), w, h); break;
     }
+}
+
+} // namespace
+
+void Draw(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
+    g_frame_w = w;
+    g_frame_h = h;
+    EnterSpaceOf(S().dialog);
+    float sx = 1.0f, sy = 1.0f;
+    SDL_RenderGetScale(r, &sx, &sy);
+    SDL_RenderSetScale(r, sx * g_scale, sy * g_scale);
+    DrawInSpace(r, sim, g_w, g_h);
+    SDL_RenderSetScale(r, sx, sy);
 }
 
 std::string SaveName() { return S().chosen_name; }

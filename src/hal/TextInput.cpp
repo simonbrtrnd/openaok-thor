@@ -84,9 +84,17 @@ void Want(Kind kind) {
 }
 
 void At(const SDL_Rect& field) {
-    const Window* window = MainWindow();
+    Window* window = MainWindow();
     if (window == nullptr) return;
-    SDL_Rect at = window->ToWindow(field);
+    // A field drawn scaled up, as a dialog grown to fill the frame is
+    // (screens/GameDialogs), is where the scale puts it.
+    float sx = 1.0f, sy = 1.0f;
+    SDL_RenderGetScale(window->GetSDLRenderer(), &sx, &sy);
+    const SDL_Rect drawn = {static_cast<int>(static_cast<float>(field.x) * sx),
+                            static_cast<int>(static_cast<float>(field.y) * sy),
+                            static_cast<int>(static_cast<float>(field.w) * sx),
+                            static_cast<int>(static_cast<float>(field.h) * sy)};
+    SDL_Rect at = window->ToWindow(drawn);
     SDL_Rect& last = g.field;
     if (at.x == last.x && at.y == last.y && at.w == last.w && at.h == last.h) return;
     last = at;

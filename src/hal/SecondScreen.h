@@ -22,6 +22,12 @@ struct Touch {
 
 // Whether the screen is there, and its size in pixels.
 bool Active();
+
+// Whether the player wants the interface on this screen rather than over the
+// map (the controller's L1 and Start together switch it), as long as the
+// screen is there. On at start.
+bool InterfaceBelow();
+void ToggleInterface();
 int Width();
 int Height();
 

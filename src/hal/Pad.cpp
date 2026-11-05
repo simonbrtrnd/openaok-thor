@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "hal/Pointer.h"
+#include "hal/SecondScreen.h"
 #include "hal/TextInput.h"
 #include "hal/Window.h"
 
@@ -217,6 +218,13 @@ bool Handle(const SDL_Event& event) {
         } else {
             Pointer::Release(mouse);
         }
+        return true;
+    }
+    // L1 and Start together put the interface over the map, or back on the
+    // second screen (hal/SecondScreen), should that screen be no use.
+    if (pad_button == SDL_CONTROLLER_BUTTON_START && pressed && g.controller != nullptr &&
+        SDL_GameControllerGetButton(g.controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) {
+        SecondScreen::ToggleInterface();
         return true;
     }
     const SDL_Scancode pad_key = KeyOfGamepad(pad_button);

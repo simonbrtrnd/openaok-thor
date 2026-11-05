@@ -12,6 +12,17 @@
 
 namespace HAL::SecondScreen {
 
+namespace {
+bool g_interface_below = true;
+} // namespace
+
+bool InterfaceBelow() { return g_interface_below; }
+
+void ToggleInterface() {
+    g_interface_below = !g_interface_below;
+    Invalidate();
+}
+
 #ifdef __ANDROID__
 
 namespace {

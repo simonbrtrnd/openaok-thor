@@ -105,10 +105,14 @@ private:
     // Centre the camera on a world point at once, as a jump on the minimap does.
     void CentreCamera(Rendering::Renderer& renderer, float gx, float gy);
 
-    // The finger on the second screen: what it went down on, and whether it
-    // is scrubbing the mini-map.
+    // The finger on the second screen: what it went down on, when, whether it
+    // is scrubbing the mini-map, and whether it has been held on a button long
+    // enough to show its help, after which lifting it presses nothing.
+    static constexpr Uint32 kSecondHelpHoldMs = 450;
     Rendering::UIRenderer::SecondScreenTarget second_pressed;
+    Uint32 second_down_ms = 0;
     bool second_minimap_drag = false;
+    bool second_help = false;
     // A finger lifted where it went down on the second screen.
     void PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer,
                            const Rendering::UIRenderer::SecondScreenTarget& target, int x, int y);

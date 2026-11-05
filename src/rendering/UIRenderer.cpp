@@ -802,7 +802,9 @@ UIRenderer::HudSpace UIRenderer::PanelSpace(int win_w, int win_h) {
     return SpaceFor(win_w, win_h, Core::Profile::Current().panel_size, true);
 }
 
-bool UIRenderer::OnSecondScreen() { return HAL::SecondScreen::Active(); }
+bool UIRenderer::OnSecondScreen() {
+    return HAL::SecondScreen::InterfaceBelow() && HAL::SecondScreen::Active();
+}
 
 int UIRenderer::TextPercent() {
     return std::clamp(Core::Profile::Current().text_size, Core::Profile::kInterfaceSizeLeast,
@@ -2583,6 +2585,25 @@ std::string UIRenderer::CommandHelp(ECS::Simulation& sim, const Command& command
     return text;
 }
 
+namespace {
+
+// The help string a mini-map button is described by, as it stands; -1 for none.
+int MinimapButtonHelp(const Hud& hud, int button) {
+    switch (button) {
+    case kSignalAllies: return 4940;
+    case kIdleVillager: return 41108;
+    case kStatistics: return hud.statistics ? 4917 : 4916;
+    case kHelpToggle: return hud.help ? 41110 : 41109;
+    case kAdvancedCommands: return hud.advanced ? 4929 : 4928;
+    case kNormalMode: return 41050;
+    case kCombatMode: return 41051;
+    case kEconomicMode: return 41053;
+    default: return -1;
+    }
+}
+
+} // namespace
+
 SDL_Rect UIRenderer::HelpBox(int lines, int win_w, int win_h) {
     const HudSpace panel = PanelSpace(win_w, win_h);
     const HudLayout& layout = Lay(panel.w);
@@ -2621,17 +2642,7 @@ void UIRenderer::DrawHelpText(ECS::Simulation& sim, SDL_Renderer* sdl_r, int win
         static const int kBarHelp[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
         text = Core::Strings::Get(kBarHelp[bar]);
     } else if (const int mm = buttons ? MinimapButtonAt(panel.w, mx, my) : -1; mm >= 0) {
-        switch (mm) {
-        case kSignalAllies: text = Core::Strings::Get(4940); break;
-        case kIdleVillager: text = Core::Strings::Get(41108); break;
-        case kStatistics: text = Core::Strings::Get(hud.statistics ? 4917 : 4916); break;
-        case kHelpToggle: text = Core::Strings::Get(hud.help ? 41110 : 41109); break;
-        case kAdvancedCommands: text = Core::Strings::Get(hud.advanced ? 4929 : 4928); break;
-        case kNormalMode: text = Core::Strings::Get(41050); break;
-        case kCombatMode: text = Core::Strings::Get(41051); break;
-        case kEconomicMode: text = Core::Strings::Get(41053); break;
-        default: break;
-        }
+        if (const int help = MinimapButtonHelp(hud, mm); help >= 0) text = Core::Strings::Get(help);
     } else if (hud.world_hint >= 0) {
         text = Core::Strings::Get(hud.world_hint);
     }
@@ -2833,6 +2844,17 @@ constexpr int kIdleVillagerHelp = 41108;
 // The 1024x768 interface, drawn for the second screen to take its parts from.
 SDL_Texture* g_second_hud = nullptr;
 
+// The finger on the second screen, as input last set it.
+struct SecondFinger {
+    UIRenderer::SecondScreenTarget on;
+    bool help = false;
+};
+SecondFinger g_second_finger;
+// A button's help in place of the card: its text a Georgia 9 two and a half
+// times its size, inset from the card's edges.
+constexpr int kSecondHelpPercent = 250;
+constexpr int kSecondHelpInset = 28;
+
 SDL_Rect SecondCell(int slot) {
     const int col = (slot - 1) % 5;
     const int row = (slot - 1) / 5;
@@ -2846,6 +2868,87 @@ SDL_Rect SecondTile(const SecondTileGroup& group, int i) {
     const int h = (group.area.h - (group.rows - 1) * kSecondGap) / group.rows;
     return SDL_Rect{group.area.x + (i % group.columns) * (w + kSecondGap),
                     group.area.y + (i / group.columns) * (h + kSecondGap), w, h};
+}
+
+// Where a button of the second screen is; empty for the mini-map or nothing.
+SDL_Rect SecondTargetRect(const UIRenderer::SecondScreenTarget& target) {
+    if (target.kind == SecondKind::Command) return SecondCell(target.index);
+    for (int i = 0; i < 6; ++i) {
+        if (kSecondBarTile[i] == target) return SecondTile(kSecondBarTiles, i);
+        if (kSecondMinimapTile[i] == target) return SecondTile(kSecondMinimapTiles, i);
+    }
+    return SDL_Rect{0, 0, 0, 0};
+}
+
+// Whether what the selected object's card writes on its right -- the owner,
+// or the words under the queue -- ends within the parchment's left columns
+// the second screen shows three times their size. With the 1024x768 frame set.
+bool CardFitsThreeTimes(ECS::Simulation& sim) {
+    const int right = kArtCard.x + kArtCard.w;
+    auto& registry = sim.GetRegistry();
+    const entt::entity selected = InspectedSelection(sim);
+    if (selected == entt::null) return true;
+    UIRenderer::QueueSlot slots[UIRenderer::kMaxQueueSlots];
+    const int shown = UIRenderer::BuildQueueSlots(sim, 1024, 768, slots, UIRenderer::kMaxQueueSlots);
+    const auto* queue = registry.try_get<ECS::Components::ProductionQueue>(selected);
+    if (shown > 0 && queue != nullptr) {
+        int widest = std::max(Text::Width(Text::kArial8, Core::Strings::Get(kStringCreating)),
+                              Text::Width(Text::kArial8, Core::Strings::Get(kStringResearching)));
+        if (queue->housed) {
+            widest = std::max(widest, Text::Width(Text::kArial8, Core::Strings::Get(kStringNeedHouses)));
+        }
+        return static_cast<int>(slots[0].rect.x) + widest <= right;
+    }
+    const auto* owner_of = registry.try_get<ECS::Components::Owner>(selected);
+    if (owner_of == nullptr || owner_of->player_id == Core::PLAYER_GAIA) return true;
+    const Core::PlayerId owner = owner_of->player_id;
+    const ECS::Players::Player* who = ECS::Players::Find(registry, owner);
+    int widest = std::max(Text::Width(Text::kGeorgia9B, Core::Strings::Get(kCivNameBase + (who ? who->civ : 1))),
+                          Text::Width(Text::kGeorgia9B, PlayerName(registry, owner)));
+    if (owner != LocalViewer()) {
+        widest = std::max({widest, Text::Width(Text::kGeorgia9B, Core::Strings::Get(kStringAlly)),
+                           Text::Width(Text::kGeorgia9B, Core::Strings::Get(kStringEnemy))});
+    }
+    return Lay(1024).civ.x + widest <= right;
+}
+
+// The help a button of the second screen gives, as the rollover help does.
+std::string SecondHelpText(ECS::Simulation& sim, const UIRenderer::SecondScreenTarget& target) {
+    switch (target.kind) {
+    case SecondKind::Command: {
+        UIRenderer::Command command;
+        return UIRenderer::SecondScreenCommand(sim, target.index, command)
+            ? UIRenderer::CommandHelp(sim, command) : std::string{};
+    }
+    case SecondKind::BarButton:
+        return Core::Strings::Get(kBarHelpString[target.index]);
+    case SecondKind::MinimapButton: {
+        const int help = MinimapButtonHelp(HudState(), target.index);
+        return help >= 0 ? Core::Strings::Get(help) : std::string{};
+    }
+    default:
+        return std::string{};
+    }
+}
+
+// The help over the card, on the dark of the original's help, wrapped to its
+// width.
+void DrawSecondHelp(SDL_Renderer* sdl_r, const std::string& text) {
+    Fill(sdl_r, kSecondCard.x, kSecondCard.y, kSecondCard.w, kSecondCard.h, SDL_Color{20, 16, 10, 255});
+    const int font = Text::Scaled(Text::kGeorgia9, kSecondHelpPercent);
+    std::vector<std::vector<Run>> lines;
+    LayoutRich(text, font, kSecondCard.w - 2 * kSecondHelpInset, lines);
+    const int line_h = Text::Height(font) + 6;
+    int y = kSecondCard.y + kSecondHelpInset;
+    for (const auto& line : lines) {
+        if (y + line_h > kSecondCard.y + kSecondCard.h) break;
+        int x = kSecondCard.x + kSecondHelpInset;
+        for (const Run& run : line) {
+            Text::DrawShadowed(sdl_r, run.font, x, y, run.text, kWhite, kBlack);
+            x += Text::Width(run.font, run.text);
+        }
+        y += line_h;
+    }
 }
 
 // A help string's bold title: "<b>Objectives<b> \n..." names the button
@@ -2931,7 +3034,8 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     SelectionCard probe[2];
     QueueSlot queue[2];
     const bool group = BuildSelectionCards(sim, kHudW, kHudH, probe, 2) >= 2;
-    const bool whole_parchment = group || BuildQueueSlots(sim, kHudW, kHudH, queue, 2) >= 2;
+    const bool whole_parchment = group || BuildQueueSlots(sim, kHudW, kHudH, queue, 2) >= 2 ||
+                                 !CardFitsThreeTimes(sim);
     if (group) {
         DrawSelectionCards(sdl_r, sim, kHudW, kHudH);
     } else {
@@ -3026,6 +3130,28 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
         Text::DrawShadowed(sdl_r, Text::Scaled(Text::kGeorgia9B, kSecondTextPercent),
                            kSecondAge.x, kSecondAge.y, age, kWhite, kBlack);
     }
+
+    // The button under the finger, pressed: darker, and edged in gold; held
+    // there, its help in place of the card.
+    const SDL_Rect pressed = SecondTargetRect(g_second_finger.on);
+    if (pressed.w > 0) {
+        Fill(sdl_r, pressed.x, pressed.y, pressed.w, pressed.h, SDL_Color{0, 0, 0, 100});
+        SDL_SetRenderDrawColor(sdl_r, 236, 196, 92, 255);
+        for (int i = 0; i < 4; ++i) {
+            const SDL_Rect edge = {pressed.x + i, pressed.y + i, pressed.w - 2 * i, pressed.h - 2 * i};
+            SDL_RenderDrawRect(sdl_r, &edge);
+        }
+    }
+    if (g_second_finger.help) {
+        if (const std::string help = SecondHelpText(sim, g_second_finger.on); !help.empty()) {
+            DrawSecondHelp(sdl_r, help);
+        }
+    }
+}
+
+void UIRenderer::SetSecondScreenFinger(const SecondScreenTarget& on, bool help) {
+    g_second_finger.on = on;
+    g_second_finger.help = help;
 }
 
 UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {

@@ -224,6 +224,10 @@ public:
         }
     };
     static SecondScreenTarget SecondScreenTargetAt(int x, int y);
+    // The finger on the second screen, as input follows it: what it is on,
+    // drawn pressed, and whether it has stayed there long enough for that
+    // button's help to show in place of the card.
+    static void SetSecondScreenFinger(const SecondScreenTarget& on, bool help);
     // The command in a slot of the second screen's grid; false when it is empty.
     static bool SecondScreenCommand(ECS::Simulation& sim, int slot, Command& out);
     // The map tile under a point of the second screen's mini-map; false off

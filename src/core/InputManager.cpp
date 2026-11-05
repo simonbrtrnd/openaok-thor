@@ -151,8 +151,11 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
     if (!accept) {
         second_pressed = Target{};
         second_minimap_drag = false;
+        second_help = false;
+        Rendering::UIRenderer::SetSecondScreenFinger(Target{}, false);
         return;
     }
+    const bool had_help = second_help;
     for (const Touch& touch : touches) {
         const int x = static_cast<int>(touch.x);
         const int y = static_cast<int>(touch.y);
@@ -161,6 +164,8 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
         switch (touch.kind) {
         case Touch::Down:
             second_pressed = target;
+            second_down_ms = SDL_GetTicks();
+            second_help = false;
             // A finger on the mini-map moves the view as it goes, unless a
             // flare waits to be pointed there.
             second_minimap_drag = target.kind == Target::Kind::Minimap &&
@@ -173,14 +178,25 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
             }
             break;
         case Touch::Up:
-            if (!second_minimap_drag && target == second_pressed) {
+            if (!second_minimap_drag && !second_help && target == second_pressed) {
                 PressSecondScreen(sim, renderer, target, x, y);
             }
             second_pressed = Target{};
             second_minimap_drag = false;
+            second_help = false;
             break;
         }
     }
+    // Held on a button, the finger asks for its help, with a buzz.
+    const bool on_button = second_pressed.kind == Target::Kind::Command ||
+                           second_pressed.kind == Target::Kind::BarButton ||
+                           second_pressed.kind == Target::Kind::MinimapButton;
+    if (on_button && !second_help && SDL_GetTicks() - second_down_ms >= kSecondHelpHoldMs) {
+        second_help = true;
+        HAL::Pad::Rumble();
+    }
+    Rendering::UIRenderer::SetSecondScreenFinger(on_button ? second_pressed : Target{}, second_help);
+    if (!touches.empty() || second_help != had_help) HAL::SecondScreen::Invalidate();
 }
 
 void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer,
@@ -221,6 +237,7 @@ void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& 
     case Kind::None:
         break;
     }
+    HAL::Pad::Rumble();
     HAL::SecondScreen::Invalidate();
 }
 

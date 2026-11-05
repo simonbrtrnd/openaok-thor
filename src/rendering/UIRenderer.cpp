@@ -325,20 +325,21 @@ void Fill(SDL_Renderer* r, int x, int y, int w, int h, SDL_Color c) {
 }
 
 // A two-pixel button bevel round a box, lit from the top left;
-// pressed, the light and dark swap.
-void Bevel(SDL_Renderer* r, int x, int y, int w, int h, bool pressed) {
+// pressed, the light and dark swap. Each pixel `unit` pixels square.
+void Bevel(SDL_Renderer* r, int x, int y, int w, int h, bool pressed, int unit = 1) {
     const SDL_Color lo = pressed ? kBevelDarkOuter : kBevelLightOuter;
     const SDL_Color li = pressed ? kBevelDarkInner : kBevelLightInner;
     const SDL_Color di = pressed ? kBevelLightInner : kBevelDarkInner;
     const SDL_Color dout = pressed ? kBevelLightOuter : kBevelDarkOuter;
-    Fill(r, x, y, w - 1, 1, lo);
-    Fill(r, x, y, 1, h - 1, lo);
-    Fill(r, x + 1, y + 1, w - 3, 1, li);
-    Fill(r, x + 1, y + 1, 1, h - 3, li);
-    Fill(r, x + 1, y + h - 2, w - 2, 1, di);
-    Fill(r, x + w - 2, y + 1, 1, h - 2, di);
-    Fill(r, x, y + h - 1, w, 1, dout);
-    Fill(r, x + w - 1, y, 1, h, dout);
+    const int u = unit;
+    Fill(r, x, y, w - u, u, lo);
+    Fill(r, x, y, u, h - u, lo);
+    Fill(r, x + u, y + u, w - 3 * u, u, li);
+    Fill(r, x + u, y + u, u, h - 3 * u, li);
+    Fill(r, x + u, y + h - 2 * u, w - 2 * u, u, di);
+    Fill(r, x + w - 2 * u, y + u, u, h - 2 * u, di);
+    Fill(r, x, y + h - u, w, u, dout);
+    Fill(r, x + w - u, y, u, h, dout);
 }
 
 // Draws one frame of an interface sheet into a box, with the owning player's
@@ -364,15 +365,18 @@ void DrawIcon(SDL_Renderer* sdl_r, uint32_t slp_id, int frame,
     }
 }
 
-// The same at the frame's own size, its top-left at (x, y) less its hotspot.
-void DrawFrame(SDL_Renderer* sdl_r, uint32_t slp_id, int frame, int x, int y, int player = 1) {
+// The same at the frame's own size, or `scale` times it, its top-left at
+// (x, y) less its hotspot.
+void DrawFrame(SDL_Renderer* sdl_r, uint32_t slp_id, int frame, int x, int y, int player = 1,
+               int scale = 1) {
     auto& graphics = HAL::GraphicCache::Get();
     const HAL::GraphicAtlas* atlas = graphics.GetInterfaceAtlas(slp_id);
     if (!atlas || frame < 0 || frame >= static_cast<int>(atlas->frames.size())) return;
     const HAL::GraphicFrame& f = atlas->frames[frame];
     if (f.rect.w == 0) return;
     DrawIcon(sdl_r, slp_id, frame,
-             SDL_Rect{x - f.hotspot_x, y - f.hotspot_y, f.rect.w, f.rect.h}, player, 255);
+             SDL_Rect{x - f.hotspot_x * scale, y - f.hotspot_y * scale, f.rect.w * scale, f.rect.h * scale},
+             player, 255);
 }
 
 // The icon sheet a unit's icon indexes into: buildings and units have
@@ -2206,36 +2210,51 @@ entt::entity UIRenderer::SelectedBuilding(ECS::Simulation& sim) {
 namespace {
 
 // The top bar: the stockpiles and population, the age, and the buttons.
-void DrawTopBar(SDL_Renderer* sdl_r, ECS::Simulation& sim, const HudLayout& layout) {
+// The readout's numbers, in its slots' order: each stockpile, then the
+// population as current/supportable, both from the population module that
+// production acts on.
+struct Readout {
+    char text[5][24];
+};
+
+Readout ReadoutOf(ECS::Simulation& sim) {
     auto& registry = sim.GetRegistry();
     const ECS::Players::Player* player = ECS::Players::Find(registry, LocalViewer());
-
-    // Population: current/supportable, both from the population module that
-    // production acts on.
     const int used = ECS::Population::Used(registry, LocalViewer());
     const int supported = ECS::Population::Capacity(registry, LocalViewer());
-
     static constexpr Core::ResourceType kOrder[4] = {
         Core::ResourceType::Wood, Core::ResourceType::Food,
         Core::ResourceType::Gold, Core::ResourceType::Stone};
+    Readout readout;
     for (int slot = 0; slot < 5; ++slot) {
-        char text[24];
+        char* text = readout.text[slot];
         if (slot == 4) {
-            std::snprintf(text, sizeof(text), "%d/%d", used, supported);
+            std::snprintf(text, sizeof(readout.text[slot]), "%d/%d", used, supported);
         } else {
-            std::snprintf(text, sizeof(text), "%d",
+            std::snprintf(text, sizeof(readout.text[slot]), "%d",
                           player != nullptr ? ECS::Players::Stock(*player, kOrder[slot]) : 0);
         }
-        const int w = Text::Width(Text::kGeorgia9B, text);
+    }
+    return readout;
+}
+
+// The name of age `age` (0 Dark .. 3 Imperial), by its tech's label.
+const std::string& AgeLabel(const entt::registry& registry, int age) {
+    return Core::Rules::TechLabel(ECS::Techs::AgeTech(registry, LocalViewer(), age));
+}
+
+void DrawTopBar(SDL_Renderer* sdl_r, ECS::Simulation& sim, const HudLayout& layout) {
+    auto& registry = sim.GetRegistry();
+    const Readout readout = ReadoutOf(sim);
+    for (int slot = 0; slot < 5; ++slot) {
+        const int w = Text::Width(Text::kGeorgia9B, readout.text[slot]);
         Text::Draw(sdl_r, Text::kGeorgia9B, layout.resource_right[slot] - w, layout.text_y,
-                   text, kWhite);
+                   readout.text[slot], kWhite);
     }
 
-    // The age the player is in, by its tech's label, centred between the
-    // stockpiles and the buttons.
-    const int age_tech = ECS::Techs::AgeTech(registry, LocalViewer(),
-                                             ECS::Techs::Age(registry, LocalViewer()));
-    const std::string& age = Core::Rules::TechLabel(age_tech);
+    // The age the player is in, centred between the stockpiles and the
+    // buttons.
+    const std::string& age = AgeLabel(registry, ECS::Techs::Age(registry, LocalViewer()));
     if (!age.empty()) {
         const int w = Text::Width(Text::kGeorgia9B, age);
         const int x = (layout.age_left + layout.age_right - w) / 2;
@@ -2319,17 +2338,50 @@ int StatIconFor(Core::ResourceType type) {
     }
 }
 
-// The selected object: its name, its portrait with the hit point bar under it,
-// its numbers each beside its symbol, and -- whoever owns it -- the owner's
-// civilisation, name and standing. A building also shows what it is making.
-void DrawUnitPanel(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win_h) {
+// What the selected object's card says, worked out once for whichever screen
+// draws it: its name, its portrait and hit points, its numbers each with its
+// symbol, and -- whoever owns it -- the owner's civilisation, name and
+// standing. One of the player's own buildings shows what it is making instead
+// of its owner.
+struct CardStat {
+    int icon = 0;
+    std::string text;
+};
+
+struct UnitCard {
+    std::string name;
+    uint32_t portrait_sheet = 0;
+    int portrait_frame = 0;
+    int portrait_player = 1;
+    bool health = false;
+    int hp = 0;
+    int max_hp = 0;
+    // At most: progress, attack, armour, range, what it holds, the four
+    // resources carried, and the garrison.
+    static constexpr int kMaxStats = 9;
+    CardStat stats[kMaxStats];
+    int stat_count = 0;
+    std::string owner[3];
+    UIRenderer::QueueSlot queue[UIRenderer::kMaxQueueSlots];
+    int queue_count = 0;
+    int32_t progress_ms = 0;    // of the first in the queue, out of front_ms
+    int32_t front_ms = 0;
+    int doing = 0;              // the string saying what it is doing
+    bool housed = false;
+};
+
+void AddStat(UnitCard& card, int icon, std::string text) {
+    if (card.stat_count >= UnitCard::kMaxStats) return;
+    card.stats[card.stat_count++] = CardStat{icon, std::move(text)};
+}
+
+bool BuildUnitCard(ECS::Simulation& sim, int win_w, int win_h, UnitCard& card) {
     auto& registry = sim.GetRegistry();
     const entt::entity selected = InspectedSelection(sim);
-    if (selected == entt::null) return;
-    if (!registry.all_of<ECS::Components::Identity>(selected)) return;
+    if (selected == entt::null) return false;
+    if (!registry.all_of<ECS::Components::Identity>(selected)) return false;
 
     auto& cfg = Core::ConfigManager::Get();
-    const HudLayout& layout = Lay(win_w);
     // A villager at work is a different dat unit with its own name and icon --
     // a lumberjack, a miner, a builder -- while the entity keeps its identity
     // as a plain villager. The job module owns that resolution.
@@ -2341,7 +2393,7 @@ void DrawUnitPanel(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win
     const int slot_id = ECS::Villagers::DisplayUnit(registry, selected);
     const int unit_id = ECS::Players::ArtOf(registry, owner, slot_id);
     const auto* ui = cfg.GetUnitInterface(unit_id);
-    if (!ui) return;
+    if (!ui) return false;
     // The owner's own numbers where it has them; a map object's from the
     // Gaia table the interface data carries. What technologies add is the
     // difference from the dat's own unit.
@@ -2352,59 +2404,44 @@ void DrawUnitPanel(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win
         unit_id >= 0 && unit_id < static_cast<int>(base_units.size()) ? &base_units[unit_id]
                                                                       : nullptr;
 
-    const std::string& name = cfg.GetUnitName(unit_id);
-    if (!name.empty()) {
-        Text::Draw(sdl_r, Text::kGeorgia9B, layout.name.x, layout.name.y, name, kBlack);
-    }
+    card.name = cfg.GetUnitName(unit_id);
+    card.portrait_sheet = IconSheetFor(unit_id);
+    card.portrait_frame = ui->icon;
+    card.portrait_player = owner != Core::PLAYER_GAIA ? owner : LocalViewer();
 
-    // The portrait sits a little into the parchment: two rows of its shadow
-    // along the top and left.
-    Fill(sdl_r, layout.portrait.x - 2, layout.portrait.y - 2, 38, 1, kPortraitShadowOuter);
-    Fill(sdl_r, layout.portrait.x - 2, layout.portrait.y - 1, 1, 37, kPortraitShadowOuter);
-    Fill(sdl_r, layout.portrait.x - 1, layout.portrait.y - 1, 37, 1, kPortraitShadowInner);
-    Fill(sdl_r, layout.portrait.x - 1, layout.portrait.y, 1, 36, kPortraitShadowInner);
-    DrawIcon(sdl_r, IconSheetFor(unit_id), ui->icon,
-             SDL_Rect{layout.portrait.x, layout.portrait.y, 36, 36},
-             owner != Core::PLAYER_GAIA ? owner : LocalViewer(), 255);
-
-    int row = 0;
     if (const auto* health = registry.try_get<ECS::Components::Health>(selected)) {
-        HealthBar(sdl_r, layout.portrait.x - 2, layout.portrait.y + 38, 40, 4,
-                  health->current_hp, health->max_hp);
-        char hp[32];
-        std::snprintf(hp, sizeof(hp), "%d/%d", health->current_hp, health->max_hp);
-        Text::Draw(sdl_r, Text::kArial8, layout.hp_text.x, layout.hp_text.y, hp, kBlack);
+        card.health = true;
+        card.hp = health->current_hp;
+        card.max_hp = health->max_hp;
 
         // A trebuchet packing or setting up: how far along, first, as
         // "%d%%" (Packing and Unpacking Progress, strings 42022-42023).
         if (ECS::Packing::Busy(registry, selected)) {
-            StatLine(sdl_r, layout, row++, kStatProgress,
-                     std::to_string(ECS::Packing::ProgressPercent(registry, selected)) + "%");
+            AddStat(card, kStatProgress,
+                    std::to_string(ECS::Packing::ProgressPercent(registry, selected)) + "%");
         }
         // Attack and armour, as base and what technologies add. A tree has no
         // hit points and shows none of this.
         const int attack = rules ? DisplayedAttack(*rules) : ui->attack;
         const int base_attack = base ? DisplayedAttack(*base) : attack;
-        if (attack > 0) StatLine(sdl_r, layout, row++, kStatAttack, WithBonus(base_attack, attack));
+        if (attack > 0) AddStat(card, kStatAttack, WithBonus(base_attack, attack));
         const int melee = rules ? MeleeArmour(*rules) : ui->melee_armour;
         const int pierce = rules ? PierceArmour(*rules) : ui->pierce_armour;
         const int base_melee = base ? MeleeArmour(*base) : melee;
         const int base_pierce = base ? PierceArmour(*base) : pierce;
         // Armour only when there is some.
         if (melee > 0 || pierce > 0) {
-            StatLine(sdl_r, layout, row++, kStatArmour,
-                     WithBonus(base_melee, melee) + "/" + WithBonus(base_pierce, pierce));
+            AddStat(card, kStatArmour, WithBonus(base_melee, melee) + "/" + WithBonus(base_pierce, pierce));
         }
         const int range = rules ? rules->max_range.ToInt() : ui->range;
         const int base_range = base ? base->max_range.ToInt() : range;
-        if (range > 0) StatLine(sdl_r, layout, row++, kStatRange, WithBonus(base_range, range));
+        if (range > 0) AddStat(card, kStatRange, WithBonus(base_range, range));
     }
 
     // What is left in it, for anything that holds a resource: a tree, a gold
     // mine, a forage bush, a farm.
     if (const auto* held = registry.try_get<ECS::Components::Resource>(selected)) {
-        StatLine(sdl_r, layout, row++, StatIconFor(held->type),
-                 std::to_string(held->current_amount));
+        AddStat(card, StatIconFor(held->type), std::to_string(held->current_amount));
     }
 
     // What it is carrying: every resource it holds, not just the last one
@@ -2412,8 +2449,7 @@ void DrawUnitPanel(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win
     if (const auto* worker = registry.try_get<ECS::Components::Worker>(selected)) {
         for (int r = 0; r < static_cast<int>(Core::ResourceType::COUNT); ++r) {
             if (worker->carried[r] <= 0) continue;
-            StatLine(sdl_r, layout, row++, StatIconFor(static_cast<Core::ResourceType>(r)),
-                     std::to_string(worker->carried[r]));
+            AddStat(card, StatIconFor(static_cast<Core::ResourceType>(r)), std::to_string(worker->carried[r]));
         }
     }
 
@@ -2421,111 +2457,161 @@ void DrawUnitPanel(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win
     if (UIRenderer::ShowsGarrison(registry, selected)) {
         const int room = ECS::Garrisons::Capacity(registry, selected);
         const int inside = ECS::Garrisons::Count(registry, selected);
-        StatLine(sdl_r, layout, row++, kStatGarrison,
-                 std::to_string(inside) + "/" + std::to_string(room));
+        AddStat(card, kStatGarrison, std::to_string(inside) + "/" + std::to_string(room));
     }
 
     // The production queue, for one of the player's own buildings: what it is
-    // making, how far along the first one is, and -- when it is held up for
-    // want of houses -- the message saying so.
-    UIRenderer::QueueSlot slots[UIRenderer::kMaxQueueSlots];
-    const int shown_slots = UIRenderer::BuildQueueSlots(sim, win_w, win_h, slots,
-                                                        UIRenderer::kMaxQueueSlots);
+    // making, how far along the first one is, and whether it is held up for
+    // want of houses.
+    const int shown = UIRenderer::BuildQueueSlots(sim, win_w, win_h, card.queue, UIRenderer::kMaxQueueSlots);
     const auto* queue = registry.try_get<ECS::Components::ProductionQueue>(selected);
-    if (shown_slots > 0 && queue != nullptr) {
-        int mx = 0, my = 0;
-        bool held = false;
-        Mouse(mx, my, held);
-        for (int i = 0; i < shown_slots; ++i) {
-            const auto& slot = slots[i];
-            const int x = static_cast<int>(slot.rect.x);
-            const int y = static_cast<int>(slot.rect.y);
-            const bool pressed = held && Inside(slot.rect, mx, my);
-            const SDL_Rect icon = {x + 2, y + 2, 36, 36};
-            if (slot.tech) {
-                if (const auto* tech = Core::Rules::Tech(slot.id)) {
-                    DrawIcon(sdl_r, cfg.ResearchIconSlp(), tech->icon, icon, LocalViewer(), 255);
-                }
-            } else if (const auto* item = ECS::Players::UnitOf(registry, LocalViewer(), slot.id)) {
-                DrawIcon(sdl_r, IconSheetFor(slot.id), item->icon, icon, LocalViewer(), 255);
-            }
-            Bevel(sdl_r, x, y, 40, 40, pressed);
-            if (slot.count > 1) {
-                Text::DrawShadowed(sdl_r, Text::kArial8, x + 4, y + 3,
-                                   std::to_string(slot.count), kWhite, kBlack);
-            }
-        }
-        // Under the first: how far along it is, and the word for what it is
-        // doing.
-        const int32_t front_ms = ECS::Production::FrontDuration(registry, selected);
-        const int bx = static_cast<int>(slots[0].rect.x);
-        const int by = static_cast<int>(slots[0].rect.y + slots[0].rect.h) + 2;
-        if (front_ms > 0) {
-            const int done = std::min(40, static_cast<int>(
-                static_cast<int64_t>(queue->progress_ms) * 40 / front_ms));
-            Fill(sdl_r, bx, by, 40, 4, kBlack);
-            Fill(sdl_r, bx, by, done, 4, kHealthGreen);
-        }
-        const std::string& doing = Core::Strings::Get(
-            queue->items[0].tech ? kStringResearching : kStringCreating);
-        Text::Draw(sdl_r, Text::kArial8, bx, by + 6, doing, kBlack);
-        if (queue->housed) {
-            Text::Draw(sdl_r, Text::kArial8, bx, by + 6 + Text::Height(Text::kArial8),
-                       Core::Strings::Get(kStringNeedHouses), kBlack);
-        }
-        return;   // the queue takes the place of the owner's name
+    if (shown > 0 && queue != nullptr) {
+        card.queue_count = shown;
+        card.progress_ms = queue->progress_ms;
+        card.front_ms = ECS::Production::FrontDuration(registry, selected);
+        card.doing = queue->items[0].tech ? kStringResearching : kStringCreating;
+        card.housed = queue->housed;
+        return true;
     }
 
-    // The owner, on the right of the field: its civilisation, its name, and
-    // to anyone else its standing with them. A tree belongs to nobody, and
-    // nothing is printed for it.
+    // A tree belongs to nobody, and nothing is said of its owner.
     if (owner_of != nullptr && owner != Core::PLAYER_GAIA) {
         const ECS::Players::Player* who = ECS::Players::Find(registry, owner);
         const int civ = who != nullptr ? who->civ : 1;
-        Text::Draw(sdl_r, Text::kGeorgia9B, layout.civ.x, layout.civ.y,
-                   Core::Strings::Get(kCivNameBase + civ), kBlack);
-        Text::Draw(sdl_r, Text::kGeorgia9B, layout.civ.x, layout.civ.y + layout.civ_pitch,
-                   PlayerName(registry, owner), kBlack);
+        card.owner[0] = Core::Strings::Get(kCivNameBase + civ);
+        card.owner[1] = PlayerName(registry, owner);
         if (owner != LocalViewer()) {
             const ECS::Players::Player* me = ECS::Players::Find(registry, LocalViewer());
             const bool ally = me != nullptr && who != nullptr && me->team != 0 &&
                               me->team == who->team;
-            Text::Draw(sdl_r, Text::kGeorgia9B, layout.civ.x,
-                       layout.civ.y + 2 * layout.civ_pitch,
-                       Core::Strings::Get(ally ? kStringAlly : kStringEnemy), kBlack);
+            card.owner[2] = Core::Strings::Get(ally ? kStringAlly : kStringEnemy);
         }
+    }
+    return true;
+}
+
+// The portrait, `unit` times its size: set a little into the parchment, two
+// rows of its shadow along the top and left, with the hit point bar under it.
+void DrawPortrait(SDL_Renderer* sdl_r, const UnitCard& card, SDL_Point at, int unit) {
+    const int u = unit;
+    Fill(sdl_r, at.x - 2 * u, at.y - 2 * u, 38 * u, u, kPortraitShadowOuter);
+    Fill(sdl_r, at.x - 2 * u, at.y - u, u, 37 * u, kPortraitShadowOuter);
+    Fill(sdl_r, at.x - u, at.y - u, 37 * u, u, kPortraitShadowInner);
+    Fill(sdl_r, at.x - u, at.y, u, 36 * u, kPortraitShadowInner);
+    DrawIcon(sdl_r, card.portrait_sheet, card.portrait_frame, SDL_Rect{at.x, at.y, 36 * u, 36 * u},
+             card.portrait_player, 255);
+    if (card.health) {
+        HealthBar(sdl_r, at.x - 2 * u, at.y + 38 * u, 40 * u, 4 * u, card.hp, card.max_hp);
     }
 }
 
-// A selected group: a card per unit, its icon filling the card and its hit
-// points under it, in up to three rows.
+std::string HitPoints(const UnitCard& card) {
+    return std::to_string(card.hp) + "/" + std::to_string(card.max_hp);
+}
+
+// One of the queue's buttons in `r`, `unit` times its size: what it makes,
+// and how many when more than one.
+void DrawQueueSlot(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UIRenderer::QueueSlot& slot,
+                   const SDL_Rect& r, bool pressed, int unit, int count_font) {
+    auto& cfg = Core::ConfigManager::Get();
+    const SDL_Rect icon = {r.x + 2 * unit, r.y + 2 * unit, 36 * unit, 36 * unit};
+    if (slot.tech) {
+        if (const auto* tech = Core::Rules::Tech(slot.id)) {
+            DrawIcon(sdl_r, cfg.ResearchIconSlp(), tech->icon, icon, LocalViewer(), 255);
+        }
+    } else if (const auto* item = ECS::Players::UnitOf(sim.GetRegistry(), LocalViewer(), slot.id)) {
+        DrawIcon(sdl_r, IconSheetFor(slot.id), item->icon, icon, LocalViewer(), 255);
+    }
+    Bevel(sdl_r, r.x, r.y, r.w, r.h, pressed, unit);
+    if (slot.count > 1) {
+        Text::DrawShadowed(sdl_r, count_font, r.x + 4 * unit, r.y + 3 * unit, std::to_string(slot.count),
+                           kWhite, kBlack);
+    }
+}
+
+// Under the queue's first button, its top-left at (x, y): how far along it is,
+// `unit` times its size, and the words for what it is doing.
+void DrawQueueProgress(SDL_Renderer* sdl_r, const UnitCard& card, int x, int y, int unit, int font) {
+    if (card.front_ms > 0) {
+        const int w = 40 * unit;
+        const int done = std::min(w, static_cast<int>(static_cast<int64_t>(card.progress_ms) * w / card.front_ms));
+        Fill(sdl_r, x, y, w, 4 * unit, kBlack);
+        Fill(sdl_r, x, y, done, 4 * unit, kHealthGreen);
+    }
+    Text::Draw(sdl_r, font, x, y + 6 * unit, Core::Strings::Get(card.doing), kBlack);
+    if (card.housed) {
+        Text::Draw(sdl_r, font, x, y + 6 * unit + Text::Height(font), Core::Strings::Get(kStringNeedHouses), kBlack);
+    }
+}
+
+// The selected object's card in the parchment.
+void DrawUnitPanel(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win_h) {
+    UnitCard card;
+    if (!BuildUnitCard(sim, win_w, win_h, card)) return;
+    const HudLayout& layout = Lay(win_w);
+
+    if (!card.name.empty()) {
+        Text::Draw(sdl_r, Text::kGeorgia9B, layout.name.x, layout.name.y, card.name, kBlack);
+    }
+    DrawPortrait(sdl_r, card, layout.portrait, 1);
+    if (card.health) {
+        Text::Draw(sdl_r, Text::kArial8, layout.hp_text.x, layout.hp_text.y, HitPoints(card), kBlack);
+    }
+    for (int i = 0; i < card.stat_count; ++i) {
+        StatLine(sdl_r, layout, i, card.stats[i].icon, card.stats[i].text);
+    }
+
+    if (card.queue_count > 0) {
+        int mx = 0, my = 0;
+        bool held = false;
+        Mouse(mx, my, held);
+        for (int i = 0; i < card.queue_count; ++i) {
+            const auto& slot = card.queue[i];
+            const SDL_Rect r = {static_cast<int>(slot.rect.x), static_cast<int>(slot.rect.y), 40, 40};
+            DrawQueueSlot(sdl_r, sim, slot, r, held && Inside(slot.rect, mx, my), 1, Text::kArial8);
+        }
+        DrawQueueProgress(sdl_r, card, static_cast<int>(card.queue[0].rect.x),
+                          static_cast<int>(card.queue[0].rect.y + card.queue[0].rect.h) + 2, 1, Text::kArial8);
+        return;   // the queue takes the place of the owner's name
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        if (card.owner[i].empty()) continue;
+        Text::Draw(sdl_r, Text::kGeorgia9B, layout.civ.x, layout.civ.y + i * layout.civ_pitch,
+                   card.owner[i], kBlack);
+    }
+}
+
+// One card of a selected group in `r`, `unit` times its size: the icon
+// filling it, its hit points over its bottom two rows, in a bevel.
+void DrawSelectionCard(SDL_Renderer* sdl_r, entt::registry& registry, entt::entity unit_entity,
+                       const SDL_Rect& r, int unit) {
+    auto& cfg = Core::ConfigManager::Get();
+    const auto* owner_of = registry.try_get<ECS::Components::Owner>(unit_entity);
+    const Core::PlayerId owner = owner_of ? owner_of->player_id : LocalViewer();
+    const int slot_id = ECS::Villagers::DisplayUnit(registry, unit_entity);
+    const int unit_id = ECS::Players::ArtOf(registry, owner, slot_id);
+    const auto* ui = cfg.GetUnitInterface(unit_id);
+    const SDL_Rect inside = {r.x + 2 * unit, r.y + 2 * unit, r.w - 4 * unit, r.h - 4 * unit};
+    Fill(sdl_r, inside.x, inside.y, inside.w, inside.h, kBlack);
+    if (ui) DrawIcon(sdl_r, IconSheetFor(unit_id), ui->icon, inside, owner, 255);
+    if (const auto* health = registry.try_get<ECS::Components::Health>(unit_entity)) {
+        HealthBar(sdl_r, inside.x, r.y + r.h - 4 * unit, inside.w, 2 * unit, health->current_hp,
+                  health->max_hp);
+    }
+    Bevel(sdl_r, r.x, r.y, r.w, r.h, false, unit);
+}
+
+// A selected group: a card per unit, in up to three rows.
 void DrawSelectionCards(SDL_Renderer* sdl_r, ECS::Simulation& sim, int win_w, int win_h) {
     UIRenderer::SelectionCard cards[UIRenderer::kMaxSelectionCards];
     const int n = UIRenderer::BuildSelectionCards(sim, win_w, win_h, cards,
                                                   UIRenderer::kMaxSelectionCards);
     auto& registry = sim.GetRegistry();
-    auto& cfg = Core::ConfigManager::Get();
     // Right to left, so where cards overlap the one further left is on top.
     for (int i = n - 1; i >= 0; --i) {
-        const auto& card = cards[i];
-        if (!registry.valid(card.unit)) continue;
-        const auto* owner_of = registry.try_get<ECS::Components::Owner>(card.unit);
-        const Core::PlayerId owner = owner_of ? owner_of->player_id : LocalViewer();
-        const int slot_id = ECS::Villagers::DisplayUnit(registry, card.unit);
-        const int unit_id = ECS::Players::ArtOf(registry, owner, slot_id);
-        const auto* ui = cfg.GetUnitInterface(unit_id);
-        const SDL_Rect& r = card.rect;
-        // The icon at its own size, its hit points over its bottom two rows.
-        Fill(sdl_r, r.x + 2, r.y + 2, r.w - 4, r.h - 4, kBlack);
-        if (ui) {
-            DrawIcon(sdl_r, IconSheetFor(unit_id), ui->icon,
-                     SDL_Rect{r.x + 2, r.y + 2, r.w - 4, r.h - 4}, owner, 255);
-        }
-        if (const auto* health = registry.try_get<ECS::Components::Health>(card.unit)) {
-            HealthBar(sdl_r, r.x + 2, r.y + r.h - 4, r.w - 4, 2, health->current_hp,
-                      health->max_hp);
-        }
-        Bevel(sdl_r, r.x, r.y, r.w, r.h, false);
+        if (!registry.valid(cards[i].unit)) continue;
+        DrawSelectionCard(sdl_r, registry, cards[i].unit, cards[i].rect, 1);
     }
 }
 
@@ -2787,59 +2873,66 @@ void UIRenderer::DrawInterface(ECS::Simulation& sim, Renderer& renderer, SDL_Ren
 
 namespace {
 
-// The second screen's layout (the AYN Thor's lower screen, 1240x1080): a
-// 16-pixel margin and gutter round two columns, 776 and 416 pixels wide, and
-// what of the 1024x768 interface each place shows. The selected object's card
-// is the parchment's left 259 columns, down to the frame's bottom, three
-// times their size; a group's cards, or a queue of more than one kind, the
-// whole parchment twice its size, which fills the column's width.
-constexpr SDL_Rect kSecondReadout = {16, 16, 1208, 75};
-constexpr SDL_Rect kSecondCard = {16, 107, 776, 456};
-constexpr SDL_Point kSecondAge = {808, 107};
-constexpr SDL_Rect kSecondMinimap = {808, 579, 416, 211};
+// The second screen's layout (the AYN Thor's lower screen, 1240x1080), on a
+// 16-pixel margin and gutter: the top bar on two rows -- the readout and the
+// age, then its five buttons as tiles -- the selected object's card across the
+// whole width, and under it the command grid on the left and the mini-map
+// with its eight buttons on the right. What of the 1024x768 interface each
+// place shows, and how much larger.
+constexpr int kSecondGap = 16;
 constexpr SDL_Rect kArtReadout = {0, 0, 392, 25};
-constexpr SDL_Rect kArtCard = {289, 616, 259, 152};
+constexpr SDL_Rect kSecondReadout = {16, 16, 1019, 65};
+constexpr int kSecondReadoutPercent = 260;
+constexpr int kSecondAgeRight = 1224;
 constexpr SDL_Rect kArtParchment = {289, 616, 388, 152};
+constexpr SDL_Rect kSecondCard = {16, 213, 1208, 363};
 constexpr SDL_Rect kArtMinimap = {690, 600, 322, 163};
+constexpr SDL_Rect kSecondMinimap = {808, 592, 416, 211};
 // The plain stone behind the command grid, which the screen is paved with,
 // twice its size.
 constexpr SDL_Rect kArtStone = {45, 628, 190, 120};
 constexpr int kStoneScale = 2;
 constexpr int kSecondTextPercent = 300;
-constexpr int kSecondLabelPercent = 250;
+
+// The selected object's card: its name; its portrait four times its size,
+// the hit points under it; its numbers three times their size, two to a row,
+// beside it; and on the right its owner, or what it is making with the queue's
+// buttons twice their size. A group's cards fill the card inside its border.
+constexpr SDL_Point kSecondName = {44, 229};
+constexpr SDL_Point kSecondPortrait = {44, 295};
+constexpr int kSecondPortraitScale = 4;
+constexpr SDL_Point kSecondStat = {220, 303};
+constexpr SDL_Point kSecondStatStep = {300, 90};
+constexpr int kSecondStatColumns = 2;
+constexpr int kSecondStatRows = 3;
+constexpr int kSecondStatScale = 3;
+constexpr SDL_Rect kSecondOwner = {840, 295, 356, 260};
+constexpr int kSecondOwnerPitch = 60;
+constexpr int kSecondQueueScale = 2;
+constexpr SDL_Rect kSecondGroup = {44, 233, 1152, 323};
 
 // The command grid: each button's icon and the inner pixel of its bevel, 38
 // pixels square, four times their size, the cells touching.
-constexpr SDL_Rect kSecondGrid = {16, 579, 776, 472};
+constexpr SDL_Rect kSecondGrid = {16, 592, 776, 472};
 constexpr int kSecondGridInset = 8;
 constexpr int kSecondButtonArt = 38;
 constexpr int kSecondButtonScale = 4;
 constexpr int kSecondGridPitch = kSecondButtonArt * kSecondButtonScale;
-// Every top bar and mini-map button, as tiles in the right column: six named,
-// two by three, above the mini-map, and six pictures, three by two, below it.
-// The combat and economic mini-maps' buttons go back to the normal one when
-// pressed again, so the normal one needs no tile of its own.
+// The top bar's five buttons in a row under the readout, their pictures four
+// times their size, and the mini-map's eight, four by two, under it, three
+// times; each in the order of its enum.
 struct SecondTileGroup {
     SDL_Rect area;
     int columns;
     int rows;
 };
-constexpr SecondTileGroup kSecondBarTiles = {{808, 159, 416, 404}, 2, 3};
-constexpr SecondTileGroup kSecondMinimapTiles = {{808, 806, 416, 245}, 3, 2};
-constexpr int kSecondGap = 16;
+constexpr SecondTileGroup kSecondBarTiles = {{16, 97, 1208, 100}, kBarButtonCount, 1};
+constexpr SecondTileGroup kSecondMinimapTiles = {{808, 819, 416, 245}, 4, 2};
+constexpr int kSecondBarArtScale = 4;
+constexpr int kSecondMinimapArtScale = 3;
 using SecondKind = UIRenderer::SecondScreenTarget::Kind;
-constexpr UIRenderer::SecondScreenTarget kSecondBarTile[6] = {
-    {SecondKind::BarButton, kObjectives}, {SecondKind::BarButton, kTechTree},
-    {SecondKind::BarButton, kChat}, {SecondKind::BarButton, kDiplomacy},
-    {SecondKind::BarButton, kGameMenu}, {SecondKind::MinimapButton, kIdleVillager}};
-constexpr UIRenderer::SecondScreenTarget kSecondMinimapTile[6] = {
-    {SecondKind::MinimapButton, kAdvancedCommands}, {SecondKind::MinimapButton, kStatistics},
-    {SecondKind::MinimapButton, kHelpToggle}, {SecondKind::MinimapButton, kCombatMode},
-    {SecondKind::MinimapButton, kEconomicMode}, {SecondKind::MinimapButton, kSignalAllies}};
-// The help strings the named tiles are named by: the top bar's buttons, in
-// their order, and the idle villager's.
+// The help strings of the top bar's buttons, in their order.
 constexpr int kBarHelpString[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
-constexpr int kIdleVillagerHelp = 41108;
 
 // The 1024x768 interface, drawn for the second screen to take its parts from.
 SDL_Texture* g_second_hud = nullptr;
@@ -2863,53 +2956,51 @@ SDL_Rect SecondCell(int slot) {
                     kSecondGridPitch, kSecondGridPitch};
 }
 
+// Tile `i` of a group, row by row; the pixels the gaps do not divide evenly
+// are spread between them, so the last tile ends on the area's edge.
 SDL_Rect SecondTile(const SecondTileGroup& group, int i) {
-    const int w = (group.area.w - (group.columns - 1) * kSecondGap) / group.columns;
-    const int h = (group.area.h - (group.rows - 1) * kSecondGap) / group.rows;
-    return SDL_Rect{group.area.x + (i % group.columns) * (w + kSecondGap),
-                    group.area.y + (i / group.columns) * (h + kSecondGap), w, h};
+    const SDL_Rect& a = group.area;
+    const int w = (a.w - (group.columns - 1) * kSecondGap) / group.columns;
+    const int h = (a.h - (group.rows - 1) * kSecondGap) / group.rows;
+    const int col = i % group.columns;
+    const int row = i / group.columns;
+    return SDL_Rect{group.columns > 1 ? a.x + col * (a.w - w) / (group.columns - 1) : a.x,
+                    group.rows > 1 ? a.y + row * (a.h - h) / (group.rows - 1) : a.y, w, h};
 }
 
 // Where a button of the second screen is; empty for the mini-map or nothing.
 SDL_Rect SecondTargetRect(const UIRenderer::SecondScreenTarget& target) {
-    if (target.kind == SecondKind::Command) return SecondCell(target.index);
-    for (int i = 0; i < 6; ++i) {
-        if (kSecondBarTile[i] == target) return SecondTile(kSecondBarTiles, i);
-        if (kSecondMinimapTile[i] == target) return SecondTile(kSecondMinimapTiles, i);
+    switch (target.kind) {
+    case SecondKind::Command: return SecondCell(target.index);
+    case SecondKind::BarButton: return SecondTile(kSecondBarTiles, target.index);
+    case SecondKind::MinimapButton: return SecondTile(kSecondMinimapTiles, target.index);
+    default: return SDL_Rect{0, 0, 0, 0};
     }
-    return SDL_Rect{0, 0, 0, 0};
 }
 
-// Whether what the selected object's card writes on its right -- the owner,
-// or the words under the queue -- ends within the parchment's left columns
-// the second screen shows three times their size. With the 1024x768 frame set.
-bool CardFitsThreeTimes(ECS::Simulation& sim) {
-    const int right = kArtCard.x + kArtCard.w;
-    auto& registry = sim.GetRegistry();
-    const entt::entity selected = InspectedSelection(sim);
-    if (selected == entt::null) return true;
-    UIRenderer::QueueSlot slots[UIRenderer::kMaxQueueSlots];
-    const int shown = UIRenderer::BuildQueueSlots(sim, 1024, 768, slots, UIRenderer::kMaxQueueSlots);
-    const auto* queue = registry.try_get<ECS::Components::ProductionQueue>(selected);
-    if (shown > 0 && queue != nullptr) {
-        int widest = std::max(Text::Width(Text::kArial8, Core::Strings::Get(kStringCreating)),
-                              Text::Width(Text::kArial8, Core::Strings::Get(kStringResearching)));
-        if (queue->housed) {
-            widest = std::max(widest, Text::Width(Text::kArial8, Core::Strings::Get(kStringNeedHouses)));
-        }
-        return static_cast<int>(slots[0].rect.x) + widest <= right;
+// `font` at `percent` of its size, or a quarter less each time down to its
+// own size, until every one of `texts` is at most `width` wide: one size for
+// all of them, so the size does not change with which is shown.
+int FittingFont(int font, int percent, int width, std::initializer_list<std::string_view> texts) {
+    for (; percent > 100; percent -= 25) {
+        const int scaled = Text::Scaled(font, percent);
+        bool fits = true;
+        for (std::string_view text : texts) fits = fits && Text::Width(scaled, text) <= width;
+        if (fits) return scaled;
     }
-    const auto* owner_of = registry.try_get<ECS::Components::Owner>(selected);
-    if (owner_of == nullptr || owner_of->player_id == Core::PLAYER_GAIA) return true;
-    const Core::PlayerId owner = owner_of->player_id;
-    const ECS::Players::Player* who = ECS::Players::Find(registry, owner);
-    int widest = std::max(Text::Width(Text::kGeorgia9B, Core::Strings::Get(kCivNameBase + (who ? who->civ : 1))),
-                          Text::Width(Text::kGeorgia9B, PlayerName(registry, owner)));
-    if (owner != LocalViewer()) {
-        widest = std::max({widest, Text::Width(Text::kGeorgia9B, Core::Strings::Get(kStringAlly)),
-                           Text::Width(Text::kGeorgia9B, Core::Strings::Get(kStringEnemy))});
-    }
-    return Lay(1024).civ.x + widest <= right;
+    return font;
+}
+
+// A frame of an interface sheet, `scale` times its size or as large as fits in
+// `r`, centred in it.
+void DrawCentred(SDL_Renderer* sdl_r, uint32_t slp_id, int frame, const SDL_Rect& r, int scale) {
+    const HAL::GraphicAtlas* atlas = HAL::GraphicCache::Get().GetInterfaceAtlas(slp_id);
+    if (!atlas || frame < 0 || frame >= static_cast<int>(atlas->frames.size())) return;
+    const SDL_Rect& art = atlas->frames[frame].rect;
+    if (art.w <= 0 || art.h <= 0) return;
+    const int s = std::max(1, std::min({scale, r.w / art.w, r.h / art.h}));
+    DrawIcon(sdl_r, slp_id, frame,
+             SDL_Rect{r.x + (r.w - art.w * s) / 2, r.y + (r.h - art.h * s) / 2, art.w * s, art.h * s}, 1, 255);
 }
 
 // The help a button of the second screen gives, as the rollover help does.
@@ -2949,19 +3040,6 @@ void DrawSecondHelp(SDL_Renderer* sdl_r, const std::string& text) {
         }
         y += line_h;
     }
-}
-
-// A help string's bold title: "<b>Objectives<b> \n..." names the button
-// Objectives.
-std::string HelpTitle(int string_id) {
-    const std::string& help = Core::Strings::Get(string_id);
-    const size_t start = help.find("<b>");
-    if (start == std::string::npos) return help;
-    const size_t end = help.find("<b>", start + 3);
-    std::string title = help.substr(start + 3, end == std::string::npos ? std::string::npos : end - start - 3);
-    while (!title.empty() && title.back() == ' ') title.pop_back();
-    while (!title.empty() && title.front() == ' ') title.erase(title.begin());
-    return title;
 }
 
 // A tile's dark ground and its border, gold while the button is on.
@@ -3005,6 +3083,104 @@ void PaveWithStone(SDL_Renderer* sdl_r, const HAL::GraphicAtlas* atlas, int w, i
     }
 }
 
+// The readout's numbers over its art, crisp at its size, each ending at its
+// slot's right edge as on the top screen; and the age right of it, at the
+// size the longest of the four ages fits in.
+void DrawSecondReadout(SDL_Renderer* sdl_r, ECS::Simulation& sim, const HudLayout& layout) {
+    const Readout readout = ReadoutOf(sim);
+    const int numbers = Text::Scaled(Text::kGeorgia9B, kSecondReadoutPercent);
+    for (int slot = 0; slot < 5; ++slot) {
+        const int right = kSecondReadout.x + layout.resource_right[slot] * kSecondReadout.w / kArtReadout.w;
+        const int y = kSecondReadout.y + layout.text_y * kSecondReadout.h / kArtReadout.h;
+        Text::Draw(sdl_r, numbers, right - Text::Width(numbers, readout.text[slot]), y, readout.text[slot],
+                   kWhite);
+    }
+
+    auto& registry = sim.GetRegistry();
+    const int left = kSecondReadout.x + kSecondReadout.w + kSecondGap;
+    const int font = FittingFont(Text::kGeorgia9B, kSecondTextPercent, kSecondAgeRight - left,
+                                 {AgeLabel(registry, 0), AgeLabel(registry, 1), AgeLabel(registry, 2),
+                                  AgeLabel(registry, 3)});
+    const std::string& age = AgeLabel(registry, ECS::Techs::Age(registry, LocalViewer()));
+    if (age.empty()) return;
+    Text::DrawShadowed(sdl_r, font, kSecondAgeRight - Text::Width(font, age),
+                       kSecondReadout.y + (kSecondReadout.h - Text::Height(font)) / 2, age, kWhite, kBlack);
+}
+
+// The selected object's card, at the second screen's sizes.
+void DrawSecondUnitCard(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UnitCard& card,
+                        const HudLayout& layout) {
+    const int words = Text::Scaled(Text::kArial8, kSecondTextPercent);
+    if (!card.name.empty()) {
+        Text::Draw(sdl_r, Text::Scaled(Text::kGeorgia9B, kSecondTextPercent), kSecondName.x, kSecondName.y,
+                   card.name, kBlack);
+    }
+    DrawPortrait(sdl_r, card, kSecondPortrait, kSecondPortraitScale);
+    if (card.health) {
+        Text::Draw(sdl_r, words, kSecondPortrait.x, kSecondPortrait.y + 46 * kSecondPortraitScale,
+                   HitPoints(card), kBlack);
+    }
+    const SDL_Point text = {(layout.stat_text.x - layout.stat_icon.x) * kSecondStatScale,
+                            (layout.stat_text.y - layout.stat_icon.y) * kSecondStatScale};
+    const int stats = std::min(card.stat_count, kSecondStatColumns * kSecondStatRows);
+    for (int i = 0; i < stats; ++i) {
+        const int x = kSecondStat.x + (i % kSecondStatColumns) * kSecondStatStep.x;
+        const int y = kSecondStat.y + (i / kSecondStatColumns) * kSecondStatStep.y;
+        DrawFrame(sdl_r, kStatIconSlp, card.stats[i].icon, x, y, 1, kSecondStatScale);
+        Text::Draw(sdl_r, words, x + text.x, y + text.y, card.stats[i].text, kBlack);
+    }
+
+    if (card.queue_count > 0) {
+        // The queue's buttons close up, as a group's cards do, when more than
+        // fit side by side.
+        constexpr int u = kSecondQueueScale;
+        const int size = 40 * u;
+        const int open = (kSecondOwner.w - size) / (41 * u) + 1;
+        const int step = card.queue_count <= open ? 41 * u
+                       : (kSecondOwner.w - size) / std::max(1, card.queue_count - 1);
+        const int count = Text::Scaled(Text::kArial8, 100 * u);
+        for (int i = card.queue_count - 1; i >= 0; --i) {
+            const SDL_Rect r = {kSecondOwner.x + i * step, kSecondOwner.y, size, size};
+            DrawQueueSlot(sdl_r, sim, card.queue[i], r, false, u, count);
+        }
+        const std::string_view housed = card.housed ? Core::Strings::Get(kStringNeedHouses) : std::string_view{};
+        const int font = FittingFont(Text::kArial8, kSecondTextPercent, kSecondOwner.w,
+                                     {Core::Strings::Get(card.doing), housed});
+        DrawQueueProgress(sdl_r, card, kSecondOwner.x, kSecondOwner.y + size + 2 * u, u, font);
+        return;
+    }
+
+    const int font = FittingFont(Text::kGeorgia9B, kSecondTextPercent, kSecondOwner.w,
+                                 {card.owner[0], card.owner[1], card.owner[2]});
+    for (int i = 0; i < 3; ++i) {
+        if (card.owner[i].empty()) continue;
+        Text::Draw(sdl_r, font, kSecondOwner.x, kSecondStat.y + i * kSecondOwnerPitch, card.owner[i], kBlack);
+    }
+}
+
+// A selected group's cards, three times their size while two rows hold them
+// all, else twice; past three rows of those, each row takes a third of the
+// group and its cards close up, as on the top screen.
+void DrawSecondGroup(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UIRenderer::SelectionCard* cards,
+                     int n) {
+    const SDL_Rect& area = kSecondGroup;
+    const auto rows_at = [&](int u) { return (area.h - 40 * u) / (42 * u) + 1; };
+    const auto open_at = [&](int u) { return (area.w - 40 * u) / (40 * u) + 1; };
+    const int u = n <= rows_at(3) * open_at(3) ? 3 : 2;
+    const int size = 40 * u;
+    const int rows = rows_at(u);
+    const int open = open_at(u);
+    const int per_row = n > open * rows ? (n + rows - 1) / rows : open;
+    const int step = per_row <= open ? size : (area.w - size) / std::max(1, per_row - 1);
+    auto& registry = sim.GetRegistry();
+    // Right to left, so where cards overlap the one further left is on top.
+    for (int i = n - 1; i >= 0; --i) {
+        if (!registry.valid(cards[i].unit)) continue;
+        const SDL_Rect r = {area.x + (i % per_row) * step, area.y + (i / per_row) * 42 * u, size, size};
+        DrawSelectionCard(sdl_r, registry, cards[i].unit, r, u);
+    }
+}
+
 } // namespace
 
 void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_Renderer* sdl_r,
@@ -3018,8 +3194,9 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
         SDL_SetTextureScaleMode(g_second_hud, SDL_ScaleModeNearest);
     }
 
-    // The interface's parts as the 1024x768 frame has them, the layout looked
-    // up for that frame and the real one's put back after.
+    // The interface's art and command grid as the 1024x768 frame has them,
+    // and what the card shows, the layout looked up for that frame and the
+    // real one's put back after.
     const Frame frame = CurrentFrame();
     SDL_Texture* target = SDL_GetRenderTarget(sdl_r);
     SetFrame(kHudW, kHudH);
@@ -3031,22 +3208,14 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     DrawCommandPanel(sdl_r, sim, kHudW, kHudH);
     Command commands[kCommandSlots];
     const int command_count = BuildCommands(sim, kHudW, kHudH, commands, kCommandSlots);
-    SelectionCard probe[2];
-    QueueSlot queue[2];
-    const bool group = BuildSelectionCards(sim, kHudW, kHudH, probe, 2) >= 2;
-    const bool whole_parchment = group || BuildQueueSlots(sim, kHudW, kHudH, queue, 2) >= 2 ||
-                                 !CardFitsThreeTimes(sim);
-    if (group) {
-        DrawSelectionCards(sdl_r, sim, kHudW, kHudH);
-    } else {
-        DrawUnitPanel(sdl_r, sim, kHudW, kHudH);
-    }
+    SelectionCard cards[kMaxSelectionCards];
+    const int group = BuildSelectionCards(sim, kHudW, kHudH, cards, kMaxSelectionCards);
+    UnitCard card;
+    const bool single = group < 2 && BuildUnitCard(sim, kHudW, kHudH, card);
     DrawArtPart(sdl_r, sim, kHudW, kHudH, true);
-    const HudLayout& layout = Lay(kHudW);
+    const HudLayout layout = Lay(kHudW);
     DrawFrame(sdl_r, kFoodIconSlp, 0, layout.food_icon.x, layout.food_icon.y);
-    DrawTopBar(sdl_r, sim, layout);
     const SDL_FRect well = MinimapRect(kHudW, kHudH);
-    const uint32_t minimap_slp = layout.minimap_slp;
     const HAL::GraphicAtlas* art =
         HAL::GraphicCache::Get().GetInterfaceAtlas(HudArt(layout, LocalCiv(sim.GetRegistry())));
     SetFrame(frame.w, frame.h);
@@ -3054,16 +3223,19 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
 
     PaveWithStone(sdl_r, art, w, h);
     SDL_RenderCopy(sdl_r, g_second_hud, &kArtReadout, &kSecondReadout);
-    if (whole_parchment) {
-        const int h2 = kArtParchment.h * 2;
-        const SDL_Rect to = {kSecondCard.x, kSecondCard.y + (kSecondCard.h - h2) / 2, kSecondCard.w, h2};
-        SDL_RenderCopy(sdl_r, g_second_hud, &kArtParchment, &to);
-    } else {
-        SDL_RenderCopy(sdl_r, g_second_hud, &kArtCard, &kSecondCard);
+    DrawSecondReadout(sdl_r, sim, layout);
+    for (int b = 0; b < kBarButtonCount; ++b) {
+        const SDL_Rect r = SecondTile(kSecondBarTiles, b);
+        SecondTileBox(sdl_r, r, false);
+        DrawCentred(sdl_r, kBarButtonSlp, kBarButtonFrame[b], r, kSecondBarArtScale);
     }
-    SDL_RenderCopy(sdl_r, g_second_hud, &kArtMinimap, &kSecondMinimap);
-    DrawMinimapIn(sim, renderer, sdl_r, Mapped(well, kArtMinimap, kSecondMinimap),
-                  SDL_FRect{0.0f, 0.0f, static_cast<float>(frame.w), static_cast<float>(frame.h)});
+
+    SDL_RenderCopy(sdl_r, g_second_hud, &kArtParchment, &kSecondCard);
+    if (group >= 2) {
+        DrawSecondGroup(sdl_r, sim, cards, group);
+    } else if (single) {
+        DrawSecondUnitCard(sdl_r, sim, card, layout);
+    }
 
     // The command grid: an empty slot dark, a button its own art.
     SecondTileBox(sdl_r, kSecondGrid, false);
@@ -3080,55 +3252,21 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
         SDL_RenderCopy(sdl_r, g_second_hud, &from, &to);
     }
 
-    // The named tiles, each name as large as its tile has room for, and the
-    // mini-map's pictures, lit while on.
-    for (int i = 0; i < 6; ++i) {
-        const SDL_Rect r = SecondTile(kSecondBarTiles, i);
-        const SecondScreenTarget& tile = kSecondBarTile[i];
-        const bool bar = tile.kind == SecondKind::BarButton;
-        SecondTileBox(sdl_r, r, false);
-        const std::string label = HelpTitle(bar ? kBarHelpString[tile.index] : kIdleVillagerHelp);
-        int font = Text::Scaled(Text::kGeorgia9B, kSecondLabelPercent);
-        for (int percent = kSecondLabelPercent; percent > 100 && Text::Width(font, label) > r.w - 16;
-             percent -= 25) {
-            font = Text::Scaled(Text::kGeorgia9B, percent - 25);
-        }
-        // The button and its name, centred in the tile together.
-        constexpr int kSpace = 10;
-        const int icon_w = bar ? 150 : 52;
-        const int icon_h = bar ? 51 : 52;
-        const int top = r.y + (r.h - icon_h - kSpace - Text::Height(font)) / 2;
-        const SDL_Rect icon = {r.x + (r.w - icon_w) / 2, top, icon_w, icon_h};
-        if (bar) {
-            DrawIcon(sdl_r, kBarButtonSlp, kBarButtonFrame[tile.index], icon, 1, 255);
-        } else {
-            DrawIcon(sdl_r, minimap_slp, kMinimapButtonFrame[tile.index], icon, 1, 255);
-        }
-        Text::DrawShadowed(sdl_r, font, r.x + (r.w - Text::Width(font, label)) / 2,
-                           top + icon_h + kSpace, label, kWhite, kBlack);
-    }
+    // The mini-map, drawn afresh at its size, and its buttons, lit while on.
+    SDL_RenderCopy(sdl_r, g_second_hud, &kArtMinimap, &kSecondMinimap);
+    DrawMinimapIn(sim, renderer, sdl_r, Mapped(well, kArtMinimap, kSecondMinimap),
+                  SDL_FRect{0.0f, 0.0f, static_cast<float>(frame.w), static_cast<float>(frame.h)});
     const Hud& hud = HudState();
-    for (int i = 0; i < 6; ++i) {
-        const SDL_Rect r = SecondTile(kSecondMinimapTiles, i);
-        const int button = kSecondMinimapTile[i].index;
-        const bool lit = (button == kAdvancedCommands && hud.advanced) ||
-                         (button == kStatistics && hud.statistics) ||
-                         (button == kHelpToggle && hud.help) ||
-                         (button == kCombatMode && hud.minimap_mode == 1) ||
-                         (button == kEconomicMode && hud.minimap_mode == 2);
+    for (int b = 0; b < kMinimapButtonCount; ++b) {
+        const SDL_Rect r = SecondTile(kSecondMinimapTiles, b);
+        const bool lit = (b == kAdvancedCommands && hud.advanced) ||
+                         (b == kStatistics && hud.statistics) ||
+                         (b == kHelpToggle && hud.help) ||
+                         (b == kNormalMode && hud.minimap_mode == 0) ||
+                         (b == kCombatMode && hud.minimap_mode == 1) ||
+                         (b == kEconomicMode && hud.minimap_mode == 2);
         SecondTileBox(sdl_r, r, lit);
-        constexpr int kIcon = 96;
-        DrawIcon(sdl_r, minimap_slp, kMinimapButtonFrame[button] + (lit ? 1 : 0),
-                 SDL_Rect{r.x + (r.w - kIcon) / 2, r.y + (r.h - kIcon) / 2, kIcon, kIcon}, 1, 255);
-    }
-
-    auto& registry = sim.GetRegistry();
-    const int age_tech = ECS::Techs::AgeTech(registry, LocalViewer(),
-                                             ECS::Techs::Age(registry, LocalViewer()));
-    const std::string& age = Core::Rules::TechLabel(age_tech);
-    if (!age.empty()) {
-        Text::DrawShadowed(sdl_r, Text::Scaled(Text::kGeorgia9B, kSecondTextPercent),
-                           kSecondAge.x, kSecondAge.y, age, kWhite, kBlack);
+        DrawCentred(sdl_r, layout.minimap_slp, kMinimapButtonFrame[b] + (lit ? 1 : 0), r, kSecondMinimapArtScale);
     }
 
     // The button under the finger, pressed: darker, and edged in gold; held
@@ -3159,9 +3297,11 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     for (int slot = 1; slot <= kCommandSlots; ++slot) {
         if (Inside(SecondCell(slot), x, y)) return SecondScreenTarget{Kind::Command, slot};
     }
-    for (int i = 0; i < 6; ++i) {
-        if (Inside(SecondTile(kSecondBarTiles, i), x, y)) return kSecondBarTile[i];
-        if (Inside(SecondTile(kSecondMinimapTiles, i), x, y)) return kSecondMinimapTile[i];
+    for (int b = 0; b < kBarButtonCount; ++b) {
+        if (Inside(SecondTile(kSecondBarTiles, b), x, y)) return SecondScreenTarget{Kind::BarButton, b};
+    }
+    for (int b = 0; b < kMinimapButtonCount; ++b) {
+        if (Inside(SecondTile(kSecondMinimapTiles, b), x, y)) return SecondScreenTarget{Kind::MinimapButton, b};
     }
     if (Inside(kSecondMinimap, x, y)) return SecondScreenTarget{Kind::Minimap, -1};
     return SecondScreenTarget{};

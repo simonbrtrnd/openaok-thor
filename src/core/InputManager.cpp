@@ -216,12 +216,8 @@ void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& 
         Rendering::UIRenderer::RequestDialog(target.index);
         break;
     case Kind::MinimapButton:
-        // The combat and economic modes' buttons turn them off again.
         if (target.index == Rendering::kSignalAllies) {
             pending_order = PendingOrder::Flare;
-        } else if ((target.index == Rendering::kCombatMode && Rendering::UIRenderer::MinimapMode() == 1) ||
-                   (target.index == Rendering::kEconomicMode && Rendering::UIRenderer::MinimapMode() == 2)) {
-            Rendering::UIRenderer::ActivateMinimapButton(Rendering::kNormalMode);
         } else if (Rendering::UIRenderer::ActivateMinimapButton(target.index)) {
             NextIdleVillager(sim, renderer);
         }

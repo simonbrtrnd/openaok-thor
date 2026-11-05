@@ -22,6 +22,7 @@
 #include "ecs/Victory.h"
 #include "ecs/Vision.h"
 #include "hal/Audio.h"
+#include "hal/Crt.h"
 #include "hal/GraphicCache.h"
 #include "hal/Window.h"
 #include "rendering/Messages.h"
@@ -78,7 +79,7 @@ struct Shared {
     // three checks, applied only on OK.
     int option_size = 1;
     Slider music, sound, scroll;
-    CheckBox taunts, one_click, two_button, no_selection_limit, production_queue;
+    CheckBox taunts, one_click, two_button, no_selection_limit, production_queue, crt_filter;
     Slider top_bar, panel, text;   // the interface's sizes
     // The Save Game dialog: the games already saved, and the name typed.
     ListBox saves;
@@ -297,6 +298,7 @@ void OpenOptions(int w, int h) {
     s.panel = SizeSlider(SDL_Rect{ox + 530, oy + 225, 120, 22}, profile.panel_size);
     s.text = SizeSlider(SDL_Rect{ox + 530, oy + 295, 120, 22}, profile.text_size);
     s.production_queue = CheckBox{SDL_Rect{ox + 505, oy + 340, 30, 27}, profile.production_queue};
+    s.crt_filter = CheckBox{SDL_Rect{ox + 505, oy + 372, 30, 27}, profile.crt_filter};
 }
 
 void DrawOptionsDialog(SDL_Renderer* r, int w, int h) {
@@ -350,6 +352,10 @@ void DrawOptionsDialog(SDL_Renderer* r, int w, int h) {
     DrawCheckBox(r, theme, s.production_queue, s.mx, s.my, s.held);
     DrawText(r, Text::kGeorgia10B, s.production_queue.box.x + s.production_queue.box.w + 10,
              s.production_queue.box.y + 5, "Production Queue", ink, ink, Align::Left, false);
+    // The CRT monitor's look (Profile::Options::crt_filter), likewise.
+    DrawCheckBox(r, theme, s.crt_filter, s.mx, s.my, s.held);
+    DrawText(r, Text::kGeorgia10B, s.crt_filter.box.x + s.crt_filter.box.w + 10, s.crt_filter.box.y + 5,
+             "CRT Filter", ink, ink, Align::Left, false);
     Button ok{l.ok, Get(4001), Text::kBlackletter14};
     State state = StateOf(ok, s.mx, s.my, s.held);
     if (state == State::Normal) state = State::Hover;
@@ -367,7 +373,8 @@ bool OptionsEventIn(const SDL_Event& e, int w, int h) {
         for (Slider* slider : {&s.music, &s.sound, &s.scroll, &s.top_bar, &s.panel, &s.text}) {
             if (DragSlider(*slider, e.button.x, e.button.y)) return false;
         }
-        for (CheckBox* c : {&s.taunts, &s.one_click, &s.two_button, &s.no_selection_limit, &s.production_queue}) {
+        for (CheckBox* c : {&s.taunts, &s.one_click, &s.two_button, &s.no_selection_limit, &s.production_queue,
+                            &s.crt_filter}) {
             if (Hit(c->box, e.button.x, e.button.y)) {
                 c->checked = !c->checked;
                 Click();
@@ -401,6 +408,8 @@ bool OptionsEventIn(const SDL_Event& e, int w, int h) {
             profile.two_button_mouse = s.two_button.checked;
             profile.no_selection_limit = s.no_selection_limit.checked;
             profile.production_queue = s.production_queue.checked;
+            profile.crt_filter = s.crt_filter.checked;
+            HAL::Crt::SetWanted(profile.crt_filter);
             profile.top_bar_size = SizeOf(s.top_bar);
             profile.panel_size = SizeOf(s.panel);
             profile.text_size = SizeOf(s.text);

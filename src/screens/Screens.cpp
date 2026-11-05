@@ -11,6 +11,7 @@
 #include "core/Profile.h"
 #include "core/Strings.h"
 #include "hal/Audio.h"
+#include "hal/Crt.h"
 #include "hal/GraphicCache.h"
 #include "hal/Platform.h"
 #include "hal/TextInput.h"
@@ -326,7 +327,7 @@ struct OptionsScreen {
     TextField name;
     Button sizes[3];
     Slider music, sound, scroll;
-    CheckBox taunts, one_click, two_button, widescreen, no_selection_limit, production_queue;
+    CheckBox taunts, one_click, two_button, widescreen, no_selection_limit, production_queue, crt_filter;
     Slider top_bar, panel, text;   // the interface's sizes, 100% to 200%
     Button ok, cancel;
     int chosen_size = 1;
@@ -359,6 +360,7 @@ void OpenOptions() {
     o.panel = SizeSlider(SDL_Rect{590, 315, 160, 22}, profile.panel_size);
     o.text = SizeSlider(SDL_Rect{590, 385, 160, 22}, profile.text_size);
     o.production_queue = CheckBox{SDL_Rect{590, 440, 30, 27}, profile.production_queue};
+    o.crt_filter = CheckBox{SDL_Rect{590, 475, 30, 27}, profile.crt_filter};
     o.ok = Button{SDL_Rect{37, 551, 160, 35}, "OK", Text::kBlackletter14};
     o.cancel = Button{SDL_Rect{217, 551, 163, 35}, Get(4002), Text::kBlackletter14};
 }
@@ -416,6 +418,10 @@ void DrawOptions(SDL_Renderer* r) {
     DrawCheckBox(r, theme, o.production_queue, S().mx, S().my, S().held);
     DrawText(r, Text::kGeorgia10B, o.production_queue.box.x + o.production_queue.box.w + 10,
              o.production_queue.box.y + 5, "Production Queue", ink, ink, Align::Left, false);
+    // The CRT monitor's look (Profile::Options::crt_filter), likewise.
+    DrawCheckBox(r, theme, o.crt_filter, S().mx, S().my, S().held);
+    DrawText(r, Text::kGeorgia10B, o.crt_filter.box.x + o.crt_filter.box.w + 10, o.crt_filter.box.y + 5,
+             "CRT Filter", ink, ink, Align::Left, false);
     DrawButton(r, theme, o.ok, StateOf(o.ok, S().mx, S().my, S().held));
     DrawButton(r, theme, o.cancel, StateOf(o.cancel, S().mx, S().my, S().held));
     DrawCloseBox(r, theme);
@@ -429,7 +435,7 @@ void OptionsEvent(const SDL_Event& e) {
             if (DragSlider(*s, e.button.x, e.button.y)) return;
         }
         for (CheckBox* c : {&o.taunts, &o.one_click, &o.two_button, &o.widescreen, &o.no_selection_limit,
-                            &o.production_queue}) {
+                            &o.production_queue, &o.crt_filter}) {
             if (Hit(c->box, e.button.x, e.button.y)) { c->checked = !c->checked; Click(); return; }
         }
         o.name.focused = Hit(o.name.rect, e.button.x, e.button.y);
@@ -458,6 +464,8 @@ void OptionsEvent(const SDL_Event& e) {
             profile.widescreen = o.widescreen.checked;
             profile.no_selection_limit = o.no_selection_limit.checked;
             profile.production_queue = o.production_queue.checked;
+            profile.crt_filter = o.crt_filter.checked;
+            HAL::Crt::SetWanted(profile.crt_filter);
             profile.top_bar_size = SizeOf(o.top_bar);
             profile.panel_size = SizeOf(o.panel);
             profile.text_size = SizeOf(o.text);

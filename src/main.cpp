@@ -31,6 +31,7 @@
 #include "hal/Platform.h"
 #include "hal/TextInput.h"
 #include "hal/Touch.h"
+#include "hal/Crt.h"
 #include "hal/Window.h"
 #include "ecs/Simulation.h"
 #include "rendering/Renderer.h"
@@ -1940,6 +1941,7 @@ int main(int argc, char* argv[]) {
         HAL::Audio::SetVolume(static_cast<float>(Core::Profile::Current().sound_volume) / 10.0f);
         Audio::Music::SetVolume(Core::Profile::Current().music_volume);
     }
+    HAL::Crt::SetWanted(Core::Profile::Current().crt_filter);
     Screens::Init();
 
     // A show of campaign slides on its own.

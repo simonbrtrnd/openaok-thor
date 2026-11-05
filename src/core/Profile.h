@@ -43,6 +43,8 @@ struct Options {
     // What the player's buildings are researching and training, shown at the
     // map's top left (UIRenderer::DrawQueueOverview).
     bool production_queue = true;
+    // The frame shown as on a CRT monitor (hal/Crt), where the device can.
+    bool crt_filter = true;
     // The game's frame as wide as the screen, the interface reaching its
     // edges (rendering/HudLayout.h). Off, the frame is 4:3.
 #if OPENAOK_HANDHELD

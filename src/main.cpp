@@ -1,5 +1,7 @@
 #include <iostream>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <iterator>
 #include <chrono>
 #include <memory>
@@ -1089,6 +1091,51 @@ CampaignGame CampaignOf(const Core::GameSetup& setup) {
     return game;
 }
 
+// A scenario's opening view far from all of the player's own units, a camera
+// the file kept from an earlier layout as several campaigns' do, opens on the
+// player's Town Center instead, else on its unit nearest the middle of them.
+void OpenNearOwnUnits(entt::registry& registry, Core::PlayerId player, int& x, int& y) {
+    constexpr float kInView = 8.0f;   // tiles: about half the view at 100%
+    namespace C = ECS::Components;
+    const auto& cfg = Core::ConfigManager::Get();
+    auto own = registry.view<C::Owner, C::Transform>();
+    float sx = 0.0f, sy = 0.0f;
+    int count = 0;
+    for (auto e : own) {
+        if (own.get<C::Owner>(e).player_id != player) continue;
+        const auto& at = own.get<C::Transform>(e).position;
+        const float ux = at.x.ToFloat(), uy = at.y.ToFloat();
+        if (std::hypot(ux - static_cast<float>(x), uy - static_cast<float>(y)) <= kInView) return;
+        sx += ux;
+        sy += uy;
+        ++count;
+    }
+    if (count == 0) return;
+    const float mx = sx / static_cast<float>(count), my = sy / static_cast<float>(count);
+    constexpr float kNone = std::numeric_limits<float>::max();
+    float nearest_unit = kNone, nearest_tc = kNone;
+    SDL_Point unit{x, y}, tc{x, y};
+    for (auto e : own) {
+        if (own.get<C::Owner>(e).player_id != player) continue;
+        const auto& at = own.get<C::Transform>(e).position;
+        const float d = std::hypot(at.x.ToFloat() - mx, at.y.ToFloat() - my);
+        const SDL_Point tile{at.x.ToInt(), at.y.ToInt()};
+        if (d < nearest_unit) {
+            nearest_unit = d;
+            unit = tile;
+        }
+        const auto* id = registry.try_get<C::Identity>(e);
+        const auto* ui = id != nullptr ? cfg.GetUnitInterface(id->unit_id) : nullptr;
+        if (ui != nullptr && ui->name == "Town Center" && d < nearest_tc) {
+            nearest_tc = d;
+            tc = tile;
+        }
+    }
+    const SDL_Point open = nearest_tc != kNone ? tc : unit;
+    x = open.x;
+    y = open.y;
+}
+
 // The camera on a tile, as a minimap click puts it there: a Change View
 // effect's.
 void LookAtTile(Rendering::Renderer& renderer, const HAL::Window& window, int x, int y) {
@@ -1200,6 +1247,7 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
             mcy = sim->player_starts[index].second;
         }
     }
+    if (!setup.scenario.empty()) OpenNearOwnUnits(sim->GetRegistry(), Core::LocalPlayer(), mcx, mcy);
     ApplyCaptureFlags(*sim, launch, mcx, mcy);
     // --advance: the simulation's own fixed tick, run ahead of the first frame.
     // AOE_AI_TRACE=1 prints the computer players minute by minute meanwhile.

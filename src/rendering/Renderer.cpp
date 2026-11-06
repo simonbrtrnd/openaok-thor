@@ -145,6 +145,15 @@ void Renderer::Render(ECS::Simulation& sim, HAL::Window& window, float alpha) {
     camera_x = std::max(min_cx, std::min(max_cx, camera_x));
     camera_y = std::max(min_cy, std::min(max_cy, camera_y));
 
+    // The view is drawn from a whole pixel of the frame, the camera put back
+    // where it was after: the fog's tiles meet exactly only on whole pixels
+    // at 1:1 (FogRenderer), and at a fraction of one a line of pinholes shows
+    // through it along their edges, plain in a frame shown at twice its size.
+    const float moving_x = camera_x;
+    const float moving_y = camera_y;
+    camera_x = std::round(camera_x * camera_zoom) / camera_zoom;
+    camera_y = std::round(camera_y * camera_zoom) / camera_zoom;
+
     window.BeginFrame();
     window.Clear(0, 0, 0);   // black beyond the map's edge
     
@@ -212,6 +221,8 @@ void Renderer::Render(ECS::Simulation& sim, HAL::Window& window, float alpha) {
 
     if (show_fps) UIRenderer::DrawFPS(sdl_r, current_fps, win_w);
     cost.interface = since(mark);
+    camera_x = moving_x;
+    camera_y = moving_y;
 }
 
 void Renderer::Finish(ECS::Simulation& sim, HAL::Window& window) {

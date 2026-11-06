@@ -8,6 +8,7 @@
 #include "audio/InterfaceSounds.h"
 #include "core/ConfigManager.h"
 #include "core/IsometricMath.h"
+#include "core/Profile.h"
 #include "ecs/Buildings.h"
 #include "core/Strings.h"
 #include "editor/EditorState.h"
@@ -805,10 +806,10 @@ void Update(float dt) {
         if (keys[SDL_SCANCODE_UP]) dy -= 1;
         if (keys[SDL_SCANCODE_DOWN]) dy += 1;
     }
-    // Edge scrolling wants a mouse; on a touch screen two fingers drag the
-    // map instead (hal/Touch), and a gamepad scrolls with its stick.
+    // Edge scrolling wants a mouse or the stick's pointer; on a touch screen
+    // two fingers drag the map instead (hal/Touch).
     if (s.ui.mx >= 0 && s.ui.my >= 0 && SDL_GetMouseFocus() != nullptr && HAL::Touch::MouseAttached() &&
-        !HAL::Pad::GamepadConnected()) {
+        Core::Profile::Current().edge_scrolling) {
         if (s.ui.mx <= kEdge) dx -= 1;
         if (s.ui.mx >= s.w - 1 - kEdge) dx += 1;
         if (s.ui.my <= kEdge) dy -= 1;

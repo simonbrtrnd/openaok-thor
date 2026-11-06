@@ -43,6 +43,8 @@ struct Options {
     // What the player's buildings are researching and training, shown at the
     // map's top left (UIRenderer::DrawQueueOverview).
     bool production_queue = true;
+    // The map scrolls while the pointer rests on the frame's edge.
+    bool edge_scrolling = true;
     // The CRT look of the screens (hal/Crt), where the device can: its mode
     // (HAL::Crt::Mode, Off at first, as it blurs the text) and its intensity
     // in percent.

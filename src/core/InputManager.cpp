@@ -1258,9 +1258,9 @@ void InputManager::Update(Rendering::Renderer& renderer, float dt_seconds, int w
     HAL::Touch::SetAiming((placing_building && !ECS::Walls::IsWall(building_to_place)) ||
                           pending_order != PendingOrder::None);
 
-    // Edge scrolling wants a mouse: a finger leaves the pointer where it
-    // lifted, which may well be on an edge. A gamepad scrolls with its stick.
-    if (mouse_in_window && HAL::Touch::MouseAttached() && !HAL::Pad::GamepadConnected()) {
+    // Edge scrolling wants a mouse or the stick's pointer: a finger leaves the
+    // pointer where it lifted, which may well be on an edge.
+    if (mouse_in_window && HAL::Touch::MouseAttached() && Core::Profile::Current().edge_scrolling) {
         const int edge = 15;
         if (current_mouse_x <= edge) cx -= pan_speed;
         if (current_mouse_x >= win_w - edge) cx += pan_speed;

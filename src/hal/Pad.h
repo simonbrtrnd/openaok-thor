@@ -56,10 +56,6 @@ namespace HAL::Pad {
 void Enable();
 bool Enabled();
 
-// Whether a gamepad is open (Android). Its right stick then scrolls the map,
-// and the screen's edges do not.
-bool GamepadConnected();
-
 // A controller's button: true when the event was the controls' and has been
 // dealt with.
 bool Handle(const SDL_Event& event);

@@ -79,7 +79,7 @@ struct Shared {
     // three checks, applied only on OK.
     int option_size = 1;
     Slider music, sound, scroll;
-    CheckBox taunts, one_click, two_button, no_selection_limit, production_queue;
+    CheckBox taunts, one_click, two_button, no_selection_limit, production_queue, edge_scrolling;
     CrtChoice crt;
     Slider top_bar, panel, text;   // the interface's sizes
     // The Save Game dialog: the games already saved, and the name typed.
@@ -295,11 +295,12 @@ void OpenOptions(int w, int h) {
     s.two_button = CheckBox{SDL_Rect{ox + 250, oy + 319, 30, 27}, profile.two_button_mouse};
     s.no_selection_limit = CheckBox{SDL_Rect{ox + 250, oy + 347, 30, 27}, profile.no_selection_limit};
     // The interface's sizes, in a column of their own on the right.
-    s.top_bar = SizeSlider(SDL_Rect{ox + 530, oy + 155, 120, 22}, profile.top_bar_size);
-    s.panel = SizeSlider(SDL_Rect{ox + 530, oy + 225, 120, 22}, profile.panel_size);
-    s.text = SizeSlider(SDL_Rect{ox + 530, oy + 295, 120, 22}, profile.text_size);
-    s.production_queue = CheckBox{SDL_Rect{ox + 505, oy + 340, 30, 27}, profile.production_queue};
-    s.crt = MakeCrtChoice(ox + 505, oy + 372, profile.crt_mode, profile.crt_intensity);
+    s.top_bar = SizeSlider(SDL_Rect{ox + 530, oy + 152, 120, 22}, profile.top_bar_size);
+    s.panel = SizeSlider(SDL_Rect{ox + 530, oy + 214, 120, 22}, profile.panel_size);
+    s.text = SizeSlider(SDL_Rect{ox + 530, oy + 276, 120, 22}, profile.text_size);
+    s.production_queue = CheckBox{SDL_Rect{ox + 505, oy + 318, 30, 27}, profile.production_queue};
+    s.edge_scrolling = CheckBox{SDL_Rect{ox + 505, oy + 346, 30, 27}, profile.edge_scrolling};
+    s.crt = MakeCrtChoice(ox + 505, oy + 376, profile.crt_mode, profile.crt_intensity);
 }
 
 void DrawOptionsDialog(SDL_Renderer* r, int w, int h) {
@@ -353,6 +354,10 @@ void DrawOptionsDialog(SDL_Renderer* r, int w, int h) {
     DrawCheckBox(r, theme, s.production_queue, s.mx, s.my, s.held);
     DrawText(r, Text::kGeorgia10B, s.production_queue.box.x + s.production_queue.box.w + 10,
              s.production_queue.box.y + 5, "Production Queue", ink, ink, Align::Left, false);
+    // Edge scrolling (Profile::Options::edge_scrolling), likewise.
+    DrawCheckBox(r, theme, s.edge_scrolling, s.mx, s.my, s.held);
+    DrawText(r, Text::kGeorgia10B, s.edge_scrolling.box.x + s.edge_scrolling.box.w + 10,
+             s.edge_scrolling.box.y + 5, "Edge Scrolling", ink, ink, Align::Left, false);
     // The CRT look (Profile::Options::crt_mode), likewise.
     DrawCrtChoice(r, theme, s.crt, s.mx, s.my, s.held);
     Button ok{l.ok, Get(4001), Text::kBlackletter14};
@@ -376,7 +381,8 @@ bool OptionsEventIn(const SDL_Event& e, int w, int h) {
             Click();
             return false;
         }
-        for (CheckBox* c : {&s.taunts, &s.one_click, &s.two_button, &s.no_selection_limit, &s.production_queue}) {
+        for (CheckBox* c : {&s.taunts, &s.one_click, &s.two_button, &s.no_selection_limit, &s.production_queue,
+                            &s.edge_scrolling}) {
             if (Hit(c->box, e.button.x, e.button.y)) {
                 c->checked = !c->checked;
                 Click();
@@ -410,6 +416,7 @@ bool OptionsEventIn(const SDL_Event& e, int w, int h) {
             profile.two_button_mouse = s.two_button.checked;
             profile.no_selection_limit = s.no_selection_limit.checked;
             profile.production_queue = s.production_queue.checked;
+            profile.edge_scrolling = s.edge_scrolling.checked;
             profile.crt_mode = s.crt.mode;
             profile.crt_intensity = s.crt.intensity;
             HAL::Crt::Set(profile.crt_mode, profile.crt_intensity);

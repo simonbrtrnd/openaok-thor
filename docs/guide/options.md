@@ -24,6 +24,7 @@ original's; the rest are what OpenAoK adds.
 | Disable selection limit | Any number of units selected at once; unchecked, forty at most, as in the original | on |
 | Top Bar Size, Panel Size, Text Size | The top bar, the bottom panel with the minimap, and the text over the world (chat, the game's messages, scores and timers), each from 100% to 200% of its size | larger on handhelds |
 | Production Queue | What your buildings are making, shown at the map's top left (see [Improvements](/guide/improvements)) | on |
+| Edge Scrolling | The map scrolls while the pointer rests on the screen's edge, a mouse's or a controller's | on |
 
 The profile is a plain text file, `Profile/profile.txt` beside the game's data:
 in the app's Documents on iOS, in `switch/openaok/` on the Switch, and in the

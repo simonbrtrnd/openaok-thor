@@ -237,7 +237,8 @@ Some details keep the game playable by hand:
   double-click radius is widened to 64 pixels.
 - Edge scrolling waits for a real mouse or a stick: a finger leaves the pointer
   where it lifted, which may well be on an edge. On Android, `GameActivity`
-  tells the engine whether a mouse is plugged in.
+  tells the engine whether a mouse is plugged in. The Options' Edge Scrolling
+  turns it off.
 - On iOS, a finger the system lets go of without telling the app (when a
   system gesture takes the touch over) is forgotten once it has gone
   unreported for 200 ms, so it cannot hold a pan open.

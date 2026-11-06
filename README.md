@@ -1,3 +1,6 @@
+> This fork plays OpenAoK on the AYN Thor, with the map on the top screen and
+> the interface on the bottom one. See [THOR.md](THOR.md) to install it.
+
 <p align="center">
   <img src="docs/public/images/logo.png" width="680" alt="OpenAoK">
 </p>

@@ -141,6 +141,11 @@ cd android
 
 See [android/README.md](android/README.md) for details.
 
+## Feedback
+
+Feedback is welcome: a bug, an idea or a question. Open an
+[issue](https://github.com/simonbrtrnd/openaok-thor/issues).
+
 ## Credits and license
 
 - OpenAoK is by Zaydme8 and the OpenAoK contributors, under the MIT license,

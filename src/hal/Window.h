@@ -58,6 +58,15 @@ public:
     void Clear(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255);
     // Shows the frame in the window, scaled to fit and letterboxed.
     void Present();
+    // A picture to lay over the frame at the next Present, the frame's shape
+    // whatever its size, scaled with it to the window: what is drawn sharper
+    // than the frame would let it be (a dialog, screens/GameDialogs). Its
+    // colours are premultiplied by their alpha. Gone again after that Present.
+    void SetOverlay(SDL_Texture* overlay) { this->overlay = overlay; }
+    SDL_Texture* Overlay() const { return overlay; }
+    // Half the window's drawable size: a frame of it is shown at exactly twice
+    // its size, pixel for pixel, with nothing blurred.
+    void CrispSize(int& w, int& h) const;
     // Writes the frame drawn since BeginFrame to a BMP, at the game's size.
     bool CaptureFrame(const std::string& path);
 
@@ -97,6 +106,7 @@ private:
     SDL_Window*   window   = nullptr;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture*  frame    = nullptr;
+    SDL_Texture*  overlay  = nullptr;
     int game_w = 1024;
     int game_h = 768;
     bool held_mouse = false;

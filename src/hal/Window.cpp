@@ -185,12 +185,23 @@ void Window::Present() {
     if (!Crt::Present(renderer, frame, game_w, game_h, dest, out_h)) {
         SDL_RenderCopy(renderer, frame, nullptr, &dest);
     }
+    if (overlay != nullptr) {
+        SDL_RenderCopy(renderer, overlay, nullptr, &dest);
+        overlay = nullptr;
+    }
     SDL_RenderPresent(renderer);
     GraphicCache::Get().EndFrame();
     // The controller's pointer, and the system keyboard when a line is due
     // (Switch), once a frame.
     Pad::Update();
     TextInput::Update();
+}
+
+void Window::CrispSize(int& w, int& h) const {
+    int out_w = 0, out_h = 0;
+    SDL_GetRendererOutputSize(renderer, &out_w, &out_h);
+    w = out_w / 2;
+    h = out_h / 2;
 }
 
 bool Window::CaptureFrame(const std::string& path) {

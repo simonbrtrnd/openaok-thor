@@ -216,7 +216,22 @@ void Renderer::Render(ECS::Simulation& sim, HAL::Window& window, float alpha) {
 
 void Renderer::Finish(ECS::Simulation& sim, HAL::Window& window) {
     const auto start = std::chrono::steady_clock::now();
-    UIRenderer::DrawCursor(sim, *this, window.GetSDLRenderer());
+    // Over a dialog laid on the frame (HAL::Window::SetOverlay), the cursor
+    // goes on that picture too, at its scale, else the dialog would hide it.
+    SDL_Renderer* sdl_r = window.GetSDLRenderer();
+    if (SDL_Texture* overlay = window.Overlay()) {
+        int ow = 0, oh = 0;
+        SDL_QueryTexture(overlay, nullptr, nullptr, &ow, &oh);
+        SDL_Texture* frame = SDL_GetRenderTarget(sdl_r);
+        SDL_SetRenderTarget(sdl_r, overlay);
+        SDL_RenderSetScale(sdl_r, static_cast<float>(ow) / static_cast<float>(window.GetWidth()),
+                           static_cast<float>(oh) / static_cast<float>(window.GetHeight()));
+        UIRenderer::DrawCursor(sim, *this, sdl_r);
+        SDL_RenderSetScale(sdl_r, 1.0f, 1.0f);
+        SDL_SetRenderTarget(sdl_r, frame);
+    } else {
+        UIRenderer::DrawCursor(sim, *this, sdl_r);
+    }
     BottomPanel::SetGame(&sim, this);
     window.Present();
     BottomPanel::SetGame(nullptr, nullptr);

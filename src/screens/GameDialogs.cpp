@@ -1083,8 +1083,7 @@ float DialogScale(Dialog dialog, int w, int h) {
     const float fw = static_cast<float>(w);
     const float fh = static_cast<float>(h);
     const HAL::ScreenSize& least = HAL::kScreenSizes[0];
-    const float screen = std::max(1.0f, std::min(fw / static_cast<float>(least.width),
-                                                 fh / static_cast<float>(least.height)));
+    const float screen = std::min(fw / static_cast<float>(least.width), fh / static_cast<float>(least.height));
     if (dialog == Dialog::TechTree || dialog == Dialog::Achievements) return screen;
     float fit = fw;
     for (uint32_t sin : kWindowArt) {
@@ -1450,10 +1449,10 @@ void DrawInSpace(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
 
 } // namespace
 
-// A dialog grown to fill more of the frame is drawn at its own size and then
-// scaled up, filtered, as the frame itself is to the screen: the art's
-// dithered shadows blend then, where drawn scaled pixel by pixel they come out
-// uneven.
+// A dialog grown to fill more of the frame, or shrunk to fit a frame smaller
+// than 800x600 (the AYN Thor's crisp one, main.cpp), is drawn at its own size
+// and laid over the frame, scaled with it to the screen, filtered: drawn
+// scaled pixel by pixel, the art's dithered shadows come out uneven.
 void Draw(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
     g_frame_w = w;
     g_frame_h = h;
@@ -1471,8 +1470,7 @@ void Draw(SDL_Renderer* r, ECS::Simulation& sim, int w, int h) {
     DrawInSpace(r, sim, g_w, g_h);
     HAL::TextInput::SetFieldScale(1.0f);
     SDL_SetRenderTarget(r, frame);
-    const SDL_Rect whole = {0, 0, w, h};
-    SDL_RenderCopy(r, space, nullptr, &whole);
+    if (HAL::Window* window = HAL::MainWindow()) window->SetOverlay(space);
 }
 
 std::string SaveName() { return S().chosen_name; }

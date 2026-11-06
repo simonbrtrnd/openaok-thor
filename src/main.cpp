@@ -1327,7 +1327,38 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
     if (session.role == Net::Role::Offline) {
         if (auto* in_force = sim->GetRegistry().ctx().find<Core::GameSetup>()) in_force->cheats = true;
     }
+    // With the interface on a second screen, the frame is the crisp size
+    // (HAL::Window::CrispSize), shown at twice its size pixel for pixel as the
+    // original was on its monitors; the size the game is laid out at otherwise
+    // comes back with the interface over the map. The view keeps its middle.
+    bool frame_crisp = false;
+    int laid_out_w = window.GetWidth(), laid_out_h = window.GetHeight();
+    const auto fit_frame = [&] {
+        int crisp_w = 0, crisp_h = 0;
+        window.CrispSize(crisp_w, crisp_h);
+        const bool crisp = Rendering::UIRenderer::OnSecondScreen();
+        int to_w = window.GetWidth(), to_h = window.GetHeight();
+        if (crisp && (to_w != crisp_w || to_h != crisp_h)) {
+            laid_out_w = to_w;   // the game's own size, or what the Options just set
+            laid_out_h = to_h;
+            to_w = crisp_w;
+            to_h = crisp_h;
+        } else if (!crisp && frame_crisp) {
+            to_w = laid_out_w;
+            to_h = laid_out_h;
+        }
+        frame_crisp = crisp;
+        if (to_w == window.GetWidth() && to_h == window.GetHeight()) return;
+        const float dx = static_cast<float>(window.GetWidth() - to_w) / 2.0f;
+        const float dy = static_cast<float>(window.GetHeight() - to_h) / 2.0f;
+        renderer.camera_x += dx / renderer.camera_zoom;
+        renderer.camera_y += dy / renderer.camera_zoom;
+        renderer.target_camera_x += dx / renderer.target_camera_zoom;
+        renderer.target_camera_y += dy / renderer.target_camera_zoom;
+        window.SetGameSize(to_w, to_h);
+    };
     while (running) {
+        fit_frame();
         auto now = std::chrono::high_resolution_clock::now();
         auto frame_time = std::chrono::duration_cast<Micros>(now - prev_time);
         prev_time = now;

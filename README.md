@@ -31,7 +31,8 @@ Smaller improvements:
 - A computer with Python 3, CMake, cabextract and a C++ compiler, to prepare
   the game data once.
 
-This repository and the APK contain no game files.
+> [!NOTE]
+> This repository and the APK contain no game files.
 
 ## Install
 
@@ -57,10 +58,11 @@ This repository and the APK contain no game files.
 4. Open AoK Thor, tap Choose folder, open `OpenAoK-data`, then tap Use this
    folder and Allow. The app imports the data and launches the game.
 
-The CD stores the in-game music as audio tracks, which ISO images don't
-include. If your copy has no music, add MP3 files named `MUSIC1.MP3`,
-`MUSIC2.MP3` and so on to `original_game_1999/GAME/SOUND/STREAM/` before
-step 2.
+> [!TIP]
+> The CD stores the in-game music as audio tracks, which ISO images don't
+> include. If your copy has no music, add MP3 files named `MUSIC1.MP3`,
+> `MUSIC2.MP3` and so on to `original_game_1999/GAME/SOUND/STREAM/` before
+> step 2.
 
 ## Controller
 
@@ -112,9 +114,10 @@ Bottom screen:
 | Tap a queued unit | Cancel it |
 | Tap the age name, top right | Advance to the next age; tap twice to confirm, like Delete |
 
-The keyboard opens on the bottom screen whenever possible. Android only shows
-it on the screen you touched last, so if it pops up on the top screen, tap the
-bottom screen to move it down.
+> [!TIP]
+> The keyboard opens on the bottom screen whenever possible. Android only shows
+> it on the screen you touched last, so if it pops up on the top screen, tap the
+> bottom screen to move it down.
 
 ## Options
 
@@ -128,8 +131,11 @@ bottom screen to move it down.
 ## Permissions
 
 The app only asks for network access, used for multiplayer only, and
-vibration. Don't join games hosted by strangers: a malformed save sent by the
-host can crash the app.
+vibration.
+
+> [!WARNING]
+> Don't join games hosted by strangers: a malformed save sent by the host can
+> crash the app.
 
 ## Build the APK
 

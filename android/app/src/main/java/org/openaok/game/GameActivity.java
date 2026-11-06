@@ -56,9 +56,18 @@ public class GameActivity extends SDLActivity implements InputManager.InputDevic
         return backAsEscape(event) || super.dispatchKeyEvent(event);
     }
 
-    /** The back key, from a controller or anywhere, handed to the engine as the back key it makes Escape. */
+    /**
+     * The back key handed to the engine as the back key it makes Escape, from
+     * anywhere but a gamepad with no Select of its own: there it is that
+     * pad's Select, left to SDL, which takes it for the same button.
+     */
     static boolean backAsEscape(KeyEvent event) {
         if (event.getKeyCode() != KeyEvent.KEYCODE_BACK) {
+            return false;
+        }
+        InputDevice device = event.getDevice();
+        if (device != null && (device.getSources() & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                && !device.hasKeys(KeyEvent.KEYCODE_BUTTON_SELECT)[0]) {
             return false;
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {

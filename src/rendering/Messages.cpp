@@ -375,9 +375,14 @@ void Draw(SDL_Renderer* renderer, int win_w, int win_h, int below) {
     }
     const bool reviewing = s.review > 0 && now - s.review_at < kShowMs;
     if (!reviewing) s.review = 0;
-    const int top = view.y + sized(kFirstTop + kTextInset + (s.single_player ? kSinglePlayerDrop : 0));
     const int pitch = sized(kPitch);
     const int left = sized(kLeft);
+    // As far down as the original puts them, but no further than leaves the
+    // last line in the view: a short frame (the AYN Thor's crisp one) or a
+    // large Text size would push it off the bottom.
+    const int lowest = view.y + view.h - left - (kSlots - 1) * pitch - Text::Height(line_font);
+    const int top = std::min(view.y + sized(kFirstTop + kTextInset + (s.single_player ? kSinglePlayerDrop : 0)),
+                             lowest);
     // The newest line in the last panel and the ones before it above, as
     // many as fit; reviewing, from the line the keys have stepped back to.
     const int newest = static_cast<int>(s.lines.size()) - 1 - (reviewing ? s.review : 0);

@@ -3022,12 +3022,28 @@ SDL_Rect SecondTile(const SecondTileGroup& group, int i) {
                     group.rows > 1 ? a.y + row * (a.h - h) / (group.rows - 1) : a.y, w, h};
 }
 
+// How many buttons the queue on the card had when last drawn, for touches to
+// find them where they were.
+int g_second_queue_count = 0;
+
+// Button `i` of the queue's `count`, on the card where the owner would be,
+// twice its size; they close up, as a group's cards do, when more than fit
+// side by side.
+SDL_Rect SecondQueueRect(int i, int count) {
+    constexpr int u = kSecondQueueScale;
+    const int size = 40 * u;
+    const int open = (kSecondOwner.w - size) / (41 * u) + 1;
+    const int step = count <= open ? 41 * u : (kSecondOwner.w - size) / std::max(1, count - 1);
+    return SDL_Rect{kSecondOwner.x + i * step, kSecondOwner.y, size, size};
+}
+
 // Where a button of the second screen is; empty for the mini-map or nothing.
 SDL_Rect SecondTargetRect(const UIRenderer::SecondScreenTarget& target) {
     switch (target.kind) {
     case SecondKind::Command: return SecondCell(target.index);
     case SecondKind::BarButton: return SecondTile(kSecondBarTiles, target.index);
     case SecondKind::MinimapButton: return SecondTile(kSecondMinimapTiles, target.index);
+    case SecondKind::QueueSlot: return SecondQueueRect(target.index, g_second_queue_count);
     default: return SDL_Rect{0, 0, 0, 0};
     }
 }
@@ -3186,22 +3202,15 @@ void DrawSecondUnitCard(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UnitCar
     }
 
     if (card.queue_count > 0) {
-        // The queue's buttons close up, as a group's cards do, when more than
-        // fit side by side.
         constexpr int u = kSecondQueueScale;
-        const int size = 40 * u;
-        const int open = (kSecondOwner.w - size) / (41 * u) + 1;
-        const int step = card.queue_count <= open ? 41 * u
-                       : (kSecondOwner.w - size) / std::max(1, card.queue_count - 1);
         const int count = Text::Scaled(Text::kArial8, 100 * u);
         for (int i = card.queue_count - 1; i >= 0; --i) {
-            const SDL_Rect r = {kSecondOwner.x + i * step, kSecondOwner.y, size, size};
-            DrawQueueSlot(sdl_r, sim, card.queue[i], r, false, u, count);
+            DrawQueueSlot(sdl_r, sim, card.queue[i], SecondQueueRect(i, card.queue_count), false, u, count);
         }
         const std::string_view housed = card.housed ? Core::Strings::Get(kStringNeedHouses) : std::string_view{};
         const int font = FittingFont(Text::kArial8, kSecondTextPercent, kSecondOwner.w,
                                      {Core::Strings::Get(card.doing), housed});
-        DrawQueueProgress(sdl_r, card, kSecondOwner.x, kSecondOwner.y + size + 2 * u, u, font);
+        DrawQueueProgress(sdl_r, card, kSecondOwner.x, kSecondOwner.y + 40 * u + 2 * u, u, font);
         return;
     }
 
@@ -3267,6 +3276,7 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     const int group = BuildSelectionCards(sim, kHudW, kHudH, cards, kMaxSelectionCards);
     UnitCard card;
     const bool single = group < 2 && BuildUnitCard(sim, kHudW, kHudH, card);
+    g_second_queue_count = single ? card.queue_count : 0;
     DrawArtPart(sdl_r, sim, kHudW, kHudH, true);
     const HudLayout layout = Lay(kHudW);
     DrawFrame(sdl_r, kFoodIconSlp, 0, layout.food_icon.x, layout.food_icon.y);
@@ -3353,6 +3363,10 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     for (int slot = 1; slot <= kCommandSlots; ++slot) {
         if (Inside(SecondCell(slot), x, y)) return SecondScreenTarget{Kind::Command, slot};
     }
+    // The queue's buttons, the leftmost on top where they overlap.
+    for (int i = 0; i < g_second_queue_count; ++i) {
+        if (Inside(SecondQueueRect(i, g_second_queue_count), x, y)) return SecondScreenTarget{Kind::QueueSlot, i};
+    }
     for (int b = 0; b < kBarButtonCount; ++b) {
         if (Inside(SecondTile(kSecondBarTiles, b), x, y)) return SecondScreenTarget{Kind::BarButton, b};
     }
@@ -3361,6 +3375,17 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     }
     if (Inside(kSecondMinimap, x, y)) return SecondScreenTarget{Kind::Minimap, -1};
     return SecondScreenTarget{};
+}
+
+bool UIRenderer::SecondScreenQueueSlot(ECS::Simulation& sim, int index, QueueSlot& out) {
+    QueueSlot slots[kMaxQueueSlots];
+    const Frame frame = CurrentFrame();
+    SetFrame(1024, 768);
+    const int n = BuildQueueSlots(sim, 1024, 768, slots, kMaxQueueSlots);
+    SetFrame(frame.w, frame.h);
+    if (index < 0 || index >= n) return false;
+    out = slots[index];
+    return true;
 }
 
 bool UIRenderer::SecondScreenCommand(ECS::Simulation& sim, int slot, Command& out) {

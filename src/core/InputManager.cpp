@@ -185,11 +185,13 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
             break;
         }
     }
-    // Held on a button, the finger asks for its help, with a buzz.
-    const bool on_button = second_pressed.kind == Target::Kind::Command ||
-                           second_pressed.kind == Target::Kind::BarButton ||
-                           second_pressed.kind == Target::Kind::MinimapButton;
-    if (on_button && !second_help && SDL_GetTicks() - second_down_ms >= kSecondHelpHoldMs) {
+    // Held on a button, the finger asks for its help, with a buzz; a queue's
+    // button has none.
+    const bool helps = second_pressed.kind == Target::Kind::Command ||
+                       second_pressed.kind == Target::Kind::BarButton ||
+                       second_pressed.kind == Target::Kind::MinimapButton;
+    const bool on_button = helps || second_pressed.kind == Target::Kind::QueueSlot;
+    if (helps && !second_help && SDL_GetTicks() - second_down_ms >= kSecondHelpHoldMs) {
         second_help = true;
         HAL::Pad::Rumble();
     }
@@ -220,6 +222,16 @@ void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& 
             NextIdleVillager(sim, renderer);
         }
         break;
+    case Kind::QueueSlot: {
+        // As a click on it on the top screen: one of its units taken back
+        // out, with a full refund.
+        Rendering::UIRenderer::QueueSlot slot;
+        const entt::entity building = Rendering::UIRenderer::SelectedBuilding(sim);
+        if (building != entt::null && Rendering::UIRenderer::SecondScreenQueueSlot(sim, target.index, slot)) {
+            CommandQueue::Get().PushCommand(CancelTrainCommand{building, slot.slot, Core::LocalPlayer()});
+        }
+        break;
+    }
     case Kind::Minimap: {
         float gx = 0.0f, gy = 0.0f;
         if (pending_order == PendingOrder::Flare &&

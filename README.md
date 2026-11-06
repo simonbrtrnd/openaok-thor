@@ -16,8 +16,6 @@ Smaller improvements:
 - Control groups from the controller.
 - Menus and windows scaled up to fill the screen, all at the same size. The
   technology tree scrolls with a finger or the right stick.
-- Campaigns always start with the camera on your units.
-- Optional edge scrolling with the controller's cursor.
 
 <p align="center">
   <img src="docs/thor/top-screen.png" width="640" alt="The map on the Thor's top screen">

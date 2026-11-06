@@ -1348,6 +1348,7 @@ GameEnd RunGame(HAL::Window& window, Rendering::Renderer& renderer, Core::GameSe
             to_h = laid_out_h;
         }
         frame_crisp = crisp;
+        Rendering::UIRenderer::SetFrameHeights(to_h, crisp ? laid_out_h : to_h);
         if (to_w == window.GetWidth() && to_h == window.GetHeight()) return;
         const float dx = static_cast<float>(window.GetWidth() - to_w) / 2.0f;
         const float dy = static_cast<float>(window.GetHeight() - to_h) / 2.0f;

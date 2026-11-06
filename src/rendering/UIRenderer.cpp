@@ -813,9 +813,20 @@ bool UIRenderer::OnSecondScreen() {
     return HAL::SecondScreen::InterfaceBelow() && HAL::SecondScreen::Active();
 }
 
+namespace {
+int g_drawn_h = 1;
+int g_laid_out_h = 1;
+} // namespace
+
 int UIRenderer::TextPercent() {
-    return std::clamp(Core::Profile::Current().text_size, Core::Profile::kInterfaceSizeLeast,
-                      Core::Profile::kInterfaceSizeMost);
+    const int percent = std::clamp(Core::Profile::Current().text_size, Core::Profile::kInterfaceSizeLeast,
+                                   Core::Profile::kInterfaceSizeMost);
+    return percent * g_drawn_h / g_laid_out_h;
+}
+
+void UIRenderer::SetFrameHeights(int drawn, int laid_out) {
+    g_drawn_h = std::max(1, drawn);
+    g_laid_out_h = std::max(1, laid_out);
 }
 
 bool UIRenderer::OverInterface(int win_w, int win_h, int x, int y) {

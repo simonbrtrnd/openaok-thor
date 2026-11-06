@@ -188,7 +188,9 @@ does on a 96 DPI screen with no smoothing:
 
 The Options' Text size reaches `Text::Scaled`, which opens the same face at a
 percentage of its size and rasterises it at that size, so larger text stays
-crisp.
+crisp. In a frame drawn smaller than the game is laid out at, as the crisp
+frame of a second screen (`HAL::Window::CrispSize`), the percentage shrinks
+with the frame, and the text keeps the size it has on the screen.
 
 ## Words from LANGUAGE.DLL
 

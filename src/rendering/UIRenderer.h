@@ -46,8 +46,13 @@ public:
     static bool OnSecondScreen();
     // Whether a point of the frame is on either part of the interface.
     static bool OverInterface(int win_w, int win_h, int x, int y);
-    // The Options' Text size, in percent: the text over the world.
+    // The Options' Text size, in percent: the text over the world. In a
+    // frame drawn smaller than the game is laid out at (the crisp one,
+    // HAL::Window::CrispSize), it is scaled down with the frame, keeping the
+    // size it has on the screen.
     static int TextPercent();
+    // The height of the frame drawn and of the frame the game is laid out at.
+    static void SetFrameHeights(int drawn, int laid_out);
 
     // The whole interface over the world: the top bar, the panel with the
     // mini-map, and the rollover help, each at its size.

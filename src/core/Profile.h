@@ -34,7 +34,12 @@ struct Options {
     int scroll_speed = 5;        // 0 (slow) to 10 (fast)
     int game_speed = 1;          // 0 slow, 1 normal, 2 fast
     bool two_button_mouse = true;
+    // A handheld has no Alt key, which garrisoning otherwise needs.
+#if OPENAOK_HANDHELD
+    bool one_click_garrison = true;
+#else
     bool one_click_garrison = false;
+#endif
     bool audio_taunts = true;
     int graphics_detail = 2;     // 0 low, 1 medium, 2 high
     // Any number of units selected at once; off, forty at most, as the

@@ -11,7 +11,7 @@ original's; the rest are what OpenAoK adds.
 | Name | Your name, as other players and the game's messages show it |
 | Screen size | 800 x 600, 1024 x 768 or 1280 x 1024: the size the game's frame is laid out at, scaled to your window or screen |
 | Music volume, Sound volume | From off to high |
-| One-click garrisoning | A right-click on a building your units can enter sends them in; without it, hold Alt |
+| One-click garrisoning | A right-click on a building your units can enter sends them in; without it, hold Alt. On at first on phones, tablets and the Switch, which have no Alt key |
 | Scroll speed | How fast the map scrolls at the screen's edges, with the arrow keys and with a controller's right stick: 800 screen pixels a second at the middle setting, doubling every two and a half steps faster and halving as many slower |
 | Allow audio taunts | Off, a taunt shows in the chat but plays no sound |
 | Two-button mouse interface | Off, the left button orders as well as selects: with your units selected, a left click orders wherever the cursor shows an order or the pointer is over open ground, and selects anything else |

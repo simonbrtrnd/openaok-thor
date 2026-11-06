@@ -122,9 +122,9 @@ Bottom screen:
 ## Options
 
 - Text Size: the size of the text shown over the map.
-- One-Click Garrisoning: right-click a building to send the selected units
-  inside it. Without this option the game needs Alt + right click, and the
-  Thor has no Alt key.
+- One-Click Garrisoning, on by default: right-click a building to send the
+  selected units inside it. Without this option the game needs Alt + right
+  click, and the Thor has no Alt key.
 - Edge Scrolling: scroll the map by moving the cursor to the screen's edge.
 - CRT: filter mode and intensity. Off by default, since it makes text harder
   to read.

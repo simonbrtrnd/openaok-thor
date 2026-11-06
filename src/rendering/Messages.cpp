@@ -378,9 +378,11 @@ void Draw(SDL_Renderer* renderer, int win_w, int win_h, int below) {
     const int pitch = sized(kPitch);
     const int left = sized(kLeft);
     // As far down as the original puts them, but no further than leaves the
-    // last line in the view: a short frame (the AYN Thor's crisp one) or a
-    // large Text size would push it off the bottom.
-    const int lowest = view.y + view.h - left - (kSlots - 1) * pitch - Text::Height(line_font);
+    // last line in the view and above the rollover help in its lower left
+    // corner, two lines of it: a short frame (the AYN Thor's crisp one) or a
+    // large Text size would push them off the bottom, or under the help.
+    const int floor = std::min(view.y + view.h, UIRenderer::HelpBox(2, win_w, win_h).y);
+    const int lowest = floor - left - (kSlots - 1) * pitch - Text::Height(line_font);
     const int top = std::min(view.y + sized(kFirstTop + kTextInset + (s.single_player ? kSinglePlayerDrop : 0)),
                              lowest);
     // The newest line in the last panel and the ones before it above, as

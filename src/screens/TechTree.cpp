@@ -178,17 +178,16 @@ void Relayout(int w, int h) {
     s.dirty = false;
 }
 
-// How much taller the buttons along the bottom are than the original's, 22
-// pixels from the screen's bottom: the strip may be dragged up that much more,
-// so that nothing stays under them.
-constexpr int kButtonsTaller = 35 - 22;
+// The band the buttons take along the screen's bottom (ButtonsFor): the strip
+// may be dragged up past it, so that nothing of its last row stays under them.
+constexpr int kButtonsBand = 35;
 
 // The scroll limits: the strip's right end may come to
 // the screen's right edge, and its left end no further than the left edge.
 void ScrollTo(int x, int y, int w, int h) {
     State& s = S();
     s.scroll_x = std::min(0, std::max(x, w - s.layout.width));
-    s.scroll_y = std::min(0, std::max(y, h - s.layout.height - kButtonsTaller));
+    s.scroll_y = std::min(0, std::max(y, h - s.layout.height - kButtonsBand));
 }
 
 std::vector<std::string> CivItems(const entt::registry* registry) {

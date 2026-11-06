@@ -6,8 +6,6 @@ import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.DocumentsContract;
 import android.view.Gravity;
 import android.view.View;
@@ -42,10 +40,6 @@ import java.util.zip.CRC32;
  * CRC-32, size and path), then starts the game. Data of another version than
  * this build plays from (BuildConfig.DATA_VERSION, the folder's version.txt)
  * is asked for again.
- *
- * With the data in, the game starts after a few seconds, a button meanwhile
- * offering to copy a folder in again: the same data with files added, such as
- * the in-game music, which the CD has only as audio tracks.
  */
 public class CopyActivity extends Activity {
     private static final int kChooseFolder = 1;
@@ -58,21 +52,6 @@ public class CopyActivity extends Activity {
     private ProgressBar bar;
     private Button choose;
     private Button play;
-    private static final int kStartSeconds = 3;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private int countdown;
-    private final Runnable tick = new Runnable() {
-        @Override
-        public void run() {
-            if (countdown <= 0) {
-                play();
-                return;
-            }
-            status.setText("Starting in " + countdown + "...\n\nChoose folder copies the game's data in again.");
-            countdown--;
-            handler.postDelayed(this, 1000);
-        }
-    };
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -80,11 +59,7 @@ public class CopyActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         final int installed = installedVersion();
         if (installed == BuildConfig.DATA_VERSION) {
-            build();
-            show("", true);
-            play.setText("Play");
-            countdown = kStartSeconds;
-            handler.post(tick);
+            play();
             return;
         }
         build();
@@ -133,7 +108,6 @@ public class CopyActivity extends Activity {
         choose = new Button(this);
         choose.setText("Choose folder");
         choose.setOnClickListener(v -> {
-            handler.removeCallbacks(tick);
             Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
             startActivityForResult(pick, kChooseFolder);
         });
@@ -162,27 +136,10 @@ public class CopyActivity extends Activity {
         play.setVisibility(playable ? View.VISIBLE : View.GONE);
     }
 
-    // Left before the game starts, the launcher waits rather than start it
-    // behind the player's back.
-    @Override
-    protected void onStop() {
-        super.onStop();
-        if (handler.hasCallbacks(tick)) {
-            handler.removeCallbacks(tick);
-            show("", true);
-            status.setText("Choose folder copies the game's data in again.");
-        }
-    }
-
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != kChooseFolder || result != RESULT_OK || data == null || data.getData() == null) {
-            if (request == kChooseFolder && installedVersion() == BuildConfig.DATA_VERSION) {
-                status.setText("Choose folder copies the game's data in again.");
-            }
-            return;
-        }
+        if (request != kChooseFolder || result != RESULT_OK || data == null || data.getData() == null) return;
         final Uri tree = data.getData();
         choose.setVisibility(View.GONE);
         play.setVisibility(View.GONE);
@@ -331,7 +288,6 @@ public class CopyActivity extends Activity {
     }
 
     private void play() {
-        handler.removeCallbacks(tick);
         startActivity(new Intent(this, GameActivity.class));
         finish();
     }

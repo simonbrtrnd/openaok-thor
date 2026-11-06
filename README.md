@@ -121,6 +121,13 @@ Bottom screen:
 
 ## Options
 
+The options worth knowing on the Thor, in the Options screen of the main menu
+or of the game menu:
+
+<p align="center">
+  <img src="docs/thor/options.png" width="600" alt="The Options screen's choices">
+</p>
+
 - Text Size: the size of the text shown over the map.
 - One-Click Garrisoning, on by default: right-click a building to send the
   selected units inside it. Without this option the game needs Alt + right

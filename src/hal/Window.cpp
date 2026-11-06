@@ -151,6 +151,8 @@ void Window::Shutdown() {
 }
 
 void Window::BeginFrame() {
+    // A picture laid over a frame that was never shown is not this one's.
+    overlay = nullptr;
     SDL_SetRenderTarget(renderer, frame);
 }
 

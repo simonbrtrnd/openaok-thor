@@ -44,7 +44,7 @@ float LineShift(float pixels_per_line) {
 }
 
 struct Setting {
-    int mode = kArcade;
+    int mode = kOff;
     int intensity = 100;
     Uint32 changed_ms = 0;
     bool unsaved = false;

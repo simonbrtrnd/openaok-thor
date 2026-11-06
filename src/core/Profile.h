@@ -44,8 +44,9 @@ struct Options {
     // map's top left (UIRenderer::DrawQueueOverview).
     bool production_queue = true;
     // The CRT look of the screens (hal/Crt), where the device can: its mode
-    // (HAL::Crt::Mode, Arcade at first) and its intensity in percent.
-    int crt_mode = 2;
+    // (HAL::Crt::Mode, Off at first, as it blurs the text) and its intensity
+    // in percent.
+    int crt_mode = 0;
     int crt_intensity = 100;
     // The game's frame as wide as the screen, the interface reaching its
     // edges (rendering/HudLayout.h). Off, the frame is 4:3.

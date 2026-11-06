@@ -1,23 +1,23 @@
 # AoK Thor
 
-Age of Empires II: The Age of Kings (1999) on the AYN Thor, with both screens.
-It is a fork of [OpenAoK](https://github.com/Zaydme/openaok), a new engine that
-plays the game from your own CD.
+Age of Empires II: The Age of Kings (1999) on the AYN Thor, using both screens.
+It's a fork of [OpenAoK](https://github.com/Zaydme/openaok), an open-source
+engine that runs the original game from your own CD.
 
-- The top screen shows the map, at exactly twice its size, so the art stays
-  sharp.
-- The bottom touch screen holds the interface, in the game's own art.
-- The Thor's controller plays as a mouse and sends the game's hotkeys.
-- An optional CRT look covers both screens.
+- The top screen shows only the map, with pixel-perfect 2x scaling.
+- The bottom touchscreen shows the game's interface, using the original art.
+- The Thor's controls are fully mapped: the left stick moves the cursor and the
+  buttons trigger the game's shortcuts.
+- An optional CRT filter for both screens.
 
-It also brings smaller improvements:
+Smaller improvements:
 
-- Zoom from 35% to 300%, with a stop at 100, 200 and 300%.
-- Control groups on the controller.
-- All windows drawn at one size, as large as the screen allows. The
+- Zoom from 35% to 300%, snapping to 100%, 200% and 300%.
+- Control groups from the controller.
+- Menus and windows scaled up to fill the screen, all at the same size. The
   technology tree scrolls with a finger or the right stick.
-- Campaigns open on your own units.
-- Edge scrolling with the controller's pointer, as an option.
+- Campaigns always start with the camera on your units.
+- Optional edge scrolling with the controller's cursor.
 
 <p align="center">
   <img src="docs/thor/top-screen.png" width="640" alt="The map on the Thor's top screen">
@@ -27,10 +27,11 @@ It also brings smaller improvements:
 
 ## What you need
 
-- An AYN Thor. Only its Android 13 was tested.
-- The 1999 Age of Kings CD. The English version 1.0 was tested. The
-  Conquerors, HD and Definitive editions do not work.
-- A computer with Python 3, CMake, cabextract and a C++ compiler, once.
+- An AYN Thor (tested on Android 13).
+- The original 1999 Age of Kings CD (tested with the English version 1.0). The
+  Conquerors, HD and Definitive Edition are not supported.
+- A computer with Python 3, CMake, cabextract and a C++ compiler, to prepare
+  the game data once.
 
 This repository and the APK contain no game files.
 
@@ -38,10 +39,10 @@ This repository and the APK contain no game files.
 
 1. Download the APK from the
    [releases](https://github.com/simonbrtrnd/openaok-thor/releases) and open it
-   on the Thor. The app is called AoK Thor and installs beside the official
+   on the Thor. The app is called AoK Thor and installs alongside the official
    OpenAoK app.
 
-2. On the computer, prepare the game's data from your CD:
+2. On your computer, prepare the game data from your CD:
 
    ```sh
    git clone -b thor https://github.com/simonbrtrnd/openaok-thor.git
@@ -51,83 +52,86 @@ This repository and the APK contain no game files.
    python3 android/package.py
    ```
 
-   The data goes to `android/build/OpenAoK-data/`, about 350 MB.
+   This creates `android/build/OpenAoK-data/` (about 350 MB).
 
 3. Copy the `OpenAoK-data` folder anywhere on the Thor, such as the SD card.
 
 4. Open AoK Thor, tap Choose folder, open `OpenAoK-data`, then tap Use this
-   folder and Allow. The app copies the data and starts.
+   folder and Allow. The app imports the data and launches the game.
 
-The CD holds the in-game music as audio tracks, which an ISO image does not
-keep. To have it, put MP3 files named `MUSIC1.MP3`, `MUSIC2.MP3` and so on in
-`original_game_1999/GAME/SOUND/STREAM/` before step 2.
+The CD stores the in-game music as audio tracks, which ISO images don't
+include. If your copy has no music, add MP3 files named `MUSIC1.MP3`,
+`MUSIC2.MP3` and so on to `original_game_1999/GAME/SOUND/STREAM/` before
+step 2.
 
-## The controller
+## Controller
 
-The letters are the ones printed on the Thor: B at the bottom, A on the right,
-Y on the left, X at the top.
+Buttons are named as printed on the Thor: B bottom, A right, Y left, X top.
 
-| Button | Does |
+| Button | Action |
 | --- | --- |
-| Left stick | Pointer |
-| Right stick | Scrolls the map |
-| B | Left click; hold to drag a box or a wall |
+| Left stick | Move the cursor |
+| Right stick | Scroll the map |
+| B | Left click; hold to drag a selection box or a wall |
 | A | Right click |
 | Y | Pause |
-| X, Back key | Escape |
-| L1, held | Shift |
-| R1 | Town Center |
-| L2, R2 | Zoom out, in (35% to 300%, stops at 100, 200, 300%) |
-| D-pad up, down | Game speed |
-| D-pad left, right | Next idle villager, next idle soldier |
-| Left stick click | Selected unit |
-| Right stick click | Last alert |
+| X, Back | Escape (cancel, close a window) |
+| L1, held | Shift (add to selection, queue orders) |
+| R1 | Jump to the Town Center |
+| L2, R2 | Zoom out, zoom in |
+| D-pad up, down | Game speed up, down |
+| D-pad left | Next idle villager |
+| D-pad right | Next idle military unit |
+| Left stick click | Center on the selected unit |
+| Right stick click | Jump to the last alert |
 | Start | Game menu |
-| Select | Moves the interface to the top screen and back |
+| Select | Move the interface to the top screen and back |
 | Select held + d-pad | CRT mode (left, right) and intensity (up, down) |
-| Select held + A, B, X, Y | Control group 1 to 4; twice to go to it |
-| Select and L1 held + A, B, X, Y | Saves control group 1 to 4 |
+| Select held + A, B, X, Y | Select control group 1 to 4; press twice to jump to it |
+| Select and L1 held + A, B, X, Y | Assign control group 1 to 4 |
 
 ## Touch
 
-On the top screen:
+Top screen:
 
-| Gesture | Does |
+| Gesture | Action |
 | --- | --- |
 | Tap | Left click |
 | Hold | Right click |
-| Drag one finger | Selection box, or a wall |
-| Drag two fingers | Scrolls the map |
+| Drag one finger | Draw a selection box or a wall |
+| Drag two fingers | Scroll the map |
 | Pinch | Zoom |
 
-On the bottom screen:
+Bottom screen:
 
-| Gesture | Does |
+| Gesture | Action |
 | --- | --- |
-| Tap a button | Uses it; a bar button tapped again closes its window |
-| Hold a button | Shows its help |
-| Tap the minimap | Moves the view |
-| Tap a unit in a group | Keeps only that unit; L1 + tap drops it |
-| Hold a unit in a group | Keeps every unit of its type |
-| Tap a queued unit | Cancels it |
-| Tap the age | Starts the next age; tap twice, as for Delete |
+| Tap a button | Use it; tap a menu button again to close its window |
+| Hold a button | Show its tooltip |
+| Tap the minimap | Move the view there |
+| Tap a unit in a group | Select only that unit; L1 + tap removes it |
+| Hold a unit in a group | Select all units of that type |
+| Tap a queued unit | Cancel it |
+| Tap the age name, top right | Advance to the next age; tap twice to confirm, like Delete |
 
-The keyboard opens on the bottom screen whenever it can. Android shows it only
-on the screen touched last, so if it opens on the top screen, tap the bottom
-screen to bring it down.
+The keyboard opens on the bottom screen whenever possible. Android only shows
+it on the screen you touched last, so if it pops up on the top screen, tap the
+bottom screen to move it down.
 
 ## Options
 
-- Text Size: the text over the map.
-- One-Click Garrisoning: garrison with a right click, as the Thor has no Alt.
-- Edge Scrolling: the pointer at the screen's edge scrolls the map.
-- CRT: its mode and intensity. Off at first, as it makes text harder to read.
+- Text Size: the size of the text shown over the map.
+- One-Click Garrisoning: garrison units with a single right click, since the
+  Thor has no Alt key.
+- Edge Scrolling: scroll the map by moving the cursor to the screen's edge.
+- CRT: filter mode and intensity. Off by default, since it makes text harder
+  to read.
 
 ## Permissions
 
-The app asks for the network, for multiplayer only, and for vibration. Do not
-join games hosted by strangers: a bad saved game from the host can crash the
-app.
+The app only asks for network access, used for multiplayer only, and
+vibration. Don't join games hosted by strangers: a malformed save sent by the
+host can crash the app.
 
 ## Build the APK
 
@@ -143,14 +147,14 @@ See [android/README.md](android/README.md) for details.
 
 ## Feedback
 
-Feedback is welcome: a bug, an idea or a question. Open an
+Feedback is welcome, whether it's a bug, an idea or a question: open an
 [issue](https://github.com/simonbrtrnd/openaok-thor/issues).
 
 ## Credits and license
 
-- OpenAoK is by Zaydme8 and the OpenAoK contributors, under the MIT license,
-  as are this fork's changes. Its documentation is on the
+- OpenAoK is made by Zaydme8 and contributors, under the MIT license. This
+  fork's changes use the same license. The engine's documentation is on the
   [OpenAoK site](https://zaydme.github.io/openaok/).
-- The CRT look is crt-lottes, by Timothy Lottes, in the public domain.
-- Age of Empires II is a trademark of Microsoft. This project is not made or
-  endorsed by Microsoft or AYN.
+- The CRT filter is crt-lottes by Timothy Lottes, in the public domain.
+- Age of Empires II is a trademark of Microsoft. This project is not affiliated
+  with or endorsed by Microsoft or AYN.

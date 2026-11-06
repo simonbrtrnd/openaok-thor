@@ -24,7 +24,9 @@ import org.libsdl.app.SDLActivity;
  * A touch there gives that display the focus, as on any screen: the keys and
  * the controller then come to this window, which passes them on to the game.
  * The keyboard comes up on the screen last touched, so a line typed after a
- * button of this screen leaves the map in view.
+ * button of this screen leaves the map in view. Up on the other screen, it
+ * comes here at a touch: Android shows it only on the screen that has the
+ * focus, which a touch alone moves.
  */
 class BottomScreen implements SurfaceHolder.Callback, View.OnTouchListener, View.OnKeyListener,
         SDLActivity.TextInputHost {
@@ -107,6 +109,9 @@ class BottomScreen implements SurfaceHolder.Callback, View.OnTouchListener, View
             touchedLast = true;
         }
         nativeTouch(event.getActionMasked(), event.getX() / view.getWidth(), event.getY() / view.getHeight());
+        if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+            SDLActivity.moveTextInput();
+        }
         return true;
     }
 

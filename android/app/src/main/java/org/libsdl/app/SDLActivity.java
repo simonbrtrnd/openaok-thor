@@ -218,6 +218,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         ViewGroup textInputLayout();
     }
     protected static TextInputHost mTextInputHost;
+    // OpenAoK: the keyboard's last showing, to show it again in another window.
+    protected static ShowTextInputTask mLastTextInput;
     protected static boolean mScreenKeyboardShown;
     protected static ViewGroup mLayout;
     protected static SDLClipboardHandler mClipboardHandler;
@@ -1335,7 +1337,21 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
      */
     public static boolean showTextInput(int x, int y, int w, int h) {
         // Transfer the task to the main thread as a Runnable
-        return mSingleton.commandHandler.post(new ShowTextInputTask(x, y, w, h));
+        mLastTextInput = new ShowTextInputTask(x, y, w, h);
+        return mSingleton.commandHandler.post(mLastTextInput);
+    }
+
+    /**
+     * OpenAoK: the keyboard taken to the host's window when the host now gives
+     * it a layout there, as after a touch has given that window's screen the
+     * focus. Called on the main thread.
+     */
+    public static void moveTextInput() {
+        ViewGroup layout = mTextInputHost != null ? mTextInputHost.textInputLayout() : null;
+        if (mScreenKeyboardShown && mLastTextInput != null && mTextEdit != null && layout != null
+                && mTextEdit.getParent() != layout) {
+            mSingleton.commandHandler.post(mLastTextInput);
+        }
     }
 
     public static boolean isTextInputEvent(KeyEvent event) {

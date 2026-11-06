@@ -14,7 +14,7 @@ struct State {
 State g;
 
 bool Paint(SDL_Renderer* r, int w, int h) {
-    if (g.sim == nullptr || g.renderer == nullptr) return false;
+    if (g.sim == nullptr || g.renderer == nullptr || !HAL::SecondScreen::InterfaceBelow()) return false;
     UIRenderer::DrawSecondScreen(*g.sim, *g.renderer, r, w, h);
     return true;
 }

@@ -148,6 +148,16 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
     static std::vector<Touch> touches;
     touches.clear();
     HAL::SecondScreen::TakeTouches(touches);
+    // The interface over the map leaves the second screen black and still.
+    if (!HAL::SecondScreen::InterfaceBelow()) {
+        second_pressed = Target{};
+        second_armed = Target{};
+        second_minimap_drag = false;
+        second_help = false;
+        Rendering::UIRenderer::SetSecondScreenFinger(Target{}, false);
+        Rendering::UIRenderer::SetSecondScreenArmed(Target{});
+        return;
+    }
     if (!accept) {
         second_minimap_drag = false;
         if (second_pressed.kind != Target::Kind::BarButton) second_pressed = Target{};

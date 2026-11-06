@@ -1,4 +1,4 @@
-# Age of Kings on the AYN Thor
+# AoK Thor
 
 This fork of [OpenAoK](https://github.com/Zaydme/openaok) plays Age of Empires
 II: The Age of Kings (1999) on the AYN Thor, with both of its screens:
@@ -43,7 +43,7 @@ Download the APK from this repository's
 [releases](https://github.com/simonbrtrnd/openaok-thor/releases) and open it
 on the Thor. Android asks once to allow installs from the file manager.
 
-The app is called Age of Kings. It installs beside the official OpenAoK app
+The app is called AoK Thor. It installs beside the official OpenAoK app
 and does not replace it.
 
 ### 2. Prepare the game's data
@@ -92,12 +92,12 @@ adb push android/build/OpenAoK-data /sdcard/Download/
 
 ### 4. Choose the folder
 
-Open Age of Kings. It asks for the game's data: tap Choose folder, open the
+Open AoK Thor. It asks for the game's data: tap Choose folder, open the
 `OpenAoK-data` folder itself, tap Use this folder, then Allow. The app checks
 every file against the manifest, copies the data into its own storage, and
 starts the game. You can then delete the copy you made.
 
-## Controls
+## The controller
 
 The letters are the ones printed on the Thor: B at the bottom, A on the right,
 Y on the left and X at the top.
@@ -126,8 +126,18 @@ Y on the left and X at the top.
 | Select held, A, B, X or Y | Selects control group 1, 2, 3 or 4; press twice to go to it |
 | Select and L1 held, A, B, X or Y | Saves the selection as control group 1, 2, 3 or 4 |
 
-On the top screen, a tap is a left click and a long press a right click. Two
-fingers scroll the map and a pinch zooms.
+## Touch on the top screen
+
+| Gesture | In the game |
+| --- | --- |
+| Tap | Left click |
+| Hold a finger still for a moment | Right click; the Thor vibrates |
+| Drag one finger | Draws a selection box, or lays a wall |
+| Drag two fingers | Scrolls the map |
+| Pinch | Zooms in and out, with a stop at 100, 200 and 300% |
+
+While a building waits to be placed, the finger slides it, and lifting the
+finger places the building.
 
 ## The bottom screen
 

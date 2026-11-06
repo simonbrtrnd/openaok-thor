@@ -49,14 +49,37 @@ bool CheckZoom() {
         }
     }
 
-    // A pinch at once: the view itself, not only the zoom to come.
+    // A pinch at once: the view itself, not only the zoom to come. From a
+    // zoom no magnet holds, to another short of one.
     if (verdict == nullptr) {
         Rendering::Renderer p;
+        p.camera_zoom = p.target_camera_zoom = 1.25f;
         Under(p, x, y, false, before_x, before_y);
-        p.ZoomBy(0.8f, x, y, true);
+        p.ZoomBy(0.9f, x, y, true);
         Under(p, x, y, false, after_x, after_y);
-        if (!Near(p.camera_zoom, 0.8f) || !Near(before_x, after_x) || !Near(before_y, after_y)) {
+        if (!Near(p.camera_zoom, 1.125f) || !Near(before_x, after_x) || !Near(before_y, after_y)) {
             verdict = "a pinch did not zoom the view at once about the fingers";
+        }
+    }
+
+    // The magnets: a held zoom stops on one it passes, stays on it while
+    // pushed less than the detent, and leaves it once pushed further, from
+    // the magnet and not from where the push began.
+    if (verdict == nullptr) {
+        Rendering::Renderer m;
+        m.camera_zoom = m.target_camera_zoom = 0.9f;
+        const bool stopped = m.ZoomBy(1.2f, x, y, true);
+        if (!stopped || m.camera_zoom != 1.0f) {
+            verdict = "a held zoom went past a magnet";
+        } else {
+            m.ZoomBy(1.1f, x, y, true);
+            if (m.camera_zoom != 1.0f) verdict = "a push short of the detent left the magnet";
+        }
+        if (verdict == nullptr) {
+            m.ZoomBy(1.1f, x, y, true);
+            if (!Near(m.camera_zoom, 1.21f / Rendering::Renderer::kZoomDetent)) {
+                verdict = "a push past the detent did not leave the magnet from it";
+            }
         }
     }
     std::printf("zoom=%s\n", verdict == nullptr ? "ok" : verdict);

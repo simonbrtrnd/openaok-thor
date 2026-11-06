@@ -3027,9 +3027,11 @@ SDL_Rect SecondTile(const SecondTileGroup& group, int i) {
                     group.rows > 1 ? a.y + row * (a.h - h) / (group.rows - 1) : a.y, w, h};
 }
 
-// How many buttons the queue on the card had when last drawn, for touches to
-// find them where they were.
+// How many buttons the queue on the card had when last drawn, and how many
+// cards the group, for touches to find them where they were.
 int g_second_queue_count = 0;
+int g_second_group_count = 0;
+SDL_Rect SecondGroupRect(int i, int n);
 
 // Button `i` of the queue's `count`, on the card where the owner would be,
 // twice its size; they close up, as a group's cards do, when more than fit
@@ -3050,6 +3052,7 @@ SDL_Rect SecondTargetRect(const UIRenderer::SecondScreenTarget& target) {
     case SecondKind::MinimapButton: return SecondTile(kSecondMinimapTiles, target.index);
     case SecondKind::QueueSlot: return SecondQueueRect(target.index, g_second_queue_count);
     case SecondKind::Age: return kSecondAge;
+    case SecondKind::GroupCard: return SecondGroupRect(target.index, g_second_group_count);
     default: return SDL_Rect{0, 0, 0, 0};
     }
 }
@@ -3232,11 +3235,10 @@ void DrawSecondUnitCard(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UnitCar
     }
 }
 
-// A selected group's cards, three times their size while two rows hold them
-// all, else twice; past three rows of those, each row takes a third of the
-// group and its cards close up, as on the top screen.
-void DrawSecondGroup(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UIRenderer::SelectionCard* cards,
-                     int n) {
+// Card `i` of a selected group of `n`: three times its size while two rows
+// hold them all, else twice; past three rows of those, each row takes a third
+// of the group and its cards close up, as on the top screen.
+SDL_Rect SecondGroupRect(int i, int n) {
     const SDL_Rect& area = kSecondGroup;
     const auto rows_at = [&](int u) { return (area.h - 40 * u) / (42 * u) + 1; };
     const auto open_at = [&](int u) { return (area.w - 40 * u) / (40 * u) + 1; };
@@ -3246,12 +3248,17 @@ void DrawSecondGroup(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UIRenderer
     const int open = open_at(u);
     const int per_row = n > open * rows ? (n + rows - 1) / rows : open;
     const int step = per_row <= open ? size : (area.w - size) / std::max(1, per_row - 1);
+    return SDL_Rect{area.x + (i % per_row) * step, area.y + (i / per_row) * 42 * u, size, size};
+}
+
+void DrawSecondGroup(SDL_Renderer* sdl_r, ECS::Simulation& sim, const UIRenderer::SelectionCard* cards,
+                     int n) {
     auto& registry = sim.GetRegistry();
     // Right to left, so where cards overlap the one further left is on top.
     for (int i = n - 1; i >= 0; --i) {
         if (!registry.valid(cards[i].unit)) continue;
-        const SDL_Rect r = {area.x + (i % per_row) * step, area.y + (i / per_row) * 42 * u, size, size};
-        DrawSelectionCard(sdl_r, registry, cards[i].unit, r, u);
+        const SDL_Rect r = SecondGroupRect(i, n);
+        DrawSelectionCard(sdl_r, registry, cards[i].unit, r, r.w / 40);
     }
 }
 
@@ -3287,6 +3294,7 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     UnitCard card;
     const bool single = group < 2 && BuildUnitCard(sim, kHudW, kHudH, card);
     g_second_queue_count = single ? card.queue_count : 0;
+    g_second_group_count = group >= 2 ? group : 0;
     DrawArtPart(sdl_r, sim, kHudW, kHudH, true);
     const HudLayout layout = Lay(kHudW);
     DrawFrame(sdl_r, kFoodIconSlp, 0, layout.food_icon.x, layout.food_icon.y);
@@ -3393,7 +3401,11 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     for (int slot = 1; slot <= kCommandSlots; ++slot) {
         if (Inside(SecondCell(slot), x, y)) return SecondScreenTarget{Kind::Command, slot};
     }
-    // The queue's buttons, the leftmost on top where they overlap.
+    // A group's cards, and the queue's buttons, the leftmost on top where they
+    // overlap.
+    for (int i = 0; i < g_second_group_count; ++i) {
+        if (Inside(SecondGroupRect(i, g_second_group_count), x, y)) return SecondScreenTarget{Kind::GroupCard, i};
+    }
     for (int i = 0; i < g_second_queue_count; ++i) {
         if (Inside(SecondQueueRect(i, g_second_queue_count), x, y)) return SecondScreenTarget{Kind::QueueSlot, i};
     }
@@ -3406,6 +3418,17 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     if (Inside(kSecondAge, x, y)) return SecondScreenTarget{Kind::Age, -1};
     if (Inside(kSecondMinimap, x, y)) return SecondScreenTarget{Kind::Minimap, -1};
     return SecondScreenTarget{};
+}
+
+bool UIRenderer::SecondScreenGroupCard(ECS::Simulation& sim, int index, entt::entity& out) {
+    SelectionCard cards[kMaxSelectionCards];
+    const Frame frame = CurrentFrame();
+    SetFrame(1024, 768);
+    const int n = BuildSelectionCards(sim, 1024, 768, cards, kMaxSelectionCards);
+    SetFrame(frame.w, frame.h);
+    if (index < 0 || index >= n || !sim.GetRegistry().valid(cards[index].unit)) return false;
+    out = cards[index].unit;
+    return true;
 }
 
 bool UIRenderer::SecondScreenQueueSlot(ECS::Simulation& sim, int index, QueueSlot& out) {

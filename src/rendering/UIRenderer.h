@@ -215,9 +215,10 @@ public:
     // What a point of the second screen (DrawSecondScreen) is on: a command
     // button, by its slot from 1 to 15; a top bar or mini-map button, by its
     // number (rendering/HudLayout.h); the mini-map; a button of the selected
-    // building's queue, by its place among them from 0; or the age.
+    // building's queue, or a card of the selected group, by its place among
+    // them from 0; or the age.
     struct SecondScreenTarget {
-        enum class Kind { None, Command, BarButton, MinimapButton, Minimap, QueueSlot, Age };
+        enum class Kind { None, Command, BarButton, MinimapButton, Minimap, QueueSlot, Age, GroupCard };
         Kind kind = Kind::None;
         int index = -1;
         bool operator==(const SecondScreenTarget&) const = default;
@@ -258,6 +259,9 @@ public:
     // The queue's button at `index` on the second screen's card; false when
     // there is none.
     static bool SecondScreenQueueSlot(ECS::Simulation& sim, int index, QueueSlot& out);
+    // The unit of the selected group's card at `index` on the second screen;
+    // false when there is none.
+    static bool SecondScreenGroupCard(ECS::Simulation& sim, int index, entt::entity& out);
 
     // One card of a selected group, and the unit it stands for.
     struct SelectionCard {

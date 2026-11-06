@@ -191,10 +191,22 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
                        second_pressed.kind == Target::Kind::BarButton ||
                        second_pressed.kind == Target::Kind::MinimapButton ||
                        second_pressed.kind == Target::Kind::Age;
-    const bool on_button = helps || second_pressed.kind == Target::Kind::QueueSlot;
-    if (helps && !second_help && SDL_GetTicks() - second_down_ms >= kSecondHelpHoldMs) {
+    const bool on_button = helps || second_pressed.kind == Target::Kind::QueueSlot ||
+                           second_pressed.kind == Target::Kind::GroupCard;
+    const bool held = !second_help && SDL_GetTicks() - second_down_ms >= kSecondHelpHoldMs;
+    if (helps && held) {
         second_help = true;
         HAL::Pad::Rumble();
+    }
+    // Held on a group's card, the finger keeps every unit of its kind, as a
+    // click with Ctrl does; lifted after, it presses nothing.
+    entt::entity picked = entt::null;
+    if (second_pressed.kind == Target::Kind::GroupCard && held &&
+        Rendering::UIRenderer::SecondScreenGroupCard(sim, second_pressed.index, picked)) {
+        PickFromGroup(sim, picked, GroupPick::Kind);
+        second_help = true;
+        HAL::Pad::Rumble();
+        HAL::SecondScreen::Invalidate();
     }
     Rendering::UIRenderer::SetSecondScreenFinger(on_button ? second_pressed : Target{}, second_help);
     if (second_armed.kind != Target::Kind::None && (!accept || SDL_GetTicks() - second_armed_ms > kSecondConfirmMs)) {
@@ -262,6 +274,15 @@ void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& 
             NextIdleVillager(sim, renderer);
         }
         break;
+    case Kind::GroupCard: {
+        // As a click on it on the top screen: the group narrowed to it, or,
+        // with Shift (the controller's L1), it taken out.
+        entt::entity picked = entt::null;
+        if (Rendering::UIRenderer::SecondScreenGroupCard(sim, target.index, picked)) {
+            PickFromGroup(sim, picked, (SDL_GetModState() & KMOD_SHIFT) ? GroupPick::Leave : GroupPick::Only);
+        }
+        break;
+    }
     case Kind::QueueSlot: {
         // As a click on it on the top screen: one of its units taken back
         // out, with a full refund.
@@ -285,6 +306,30 @@ void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& 
     }
     HAL::Pad::Rumble();
     HAL::SecondScreen::Invalidate();
+}
+
+void InputManager::PickFromGroup(ECS::Simulation& sim, entt::entity picked, GroupPick how) {
+    auto& registry = sim.GetRegistry();
+    const auto* kind = registry.try_get<ECS::Components::Identity>(picked);
+    auto sel = registry.view<ECS::Components::Selectable>();
+    for (auto e : sel) {
+        auto& s = sel.get<ECS::Components::Selectable>(e);
+        if (!s.is_selected) continue;
+        switch (how) {
+        case GroupPick::Leave:
+            if (e == picked) s.is_selected = false;
+            break;
+        case GroupPick::Kind: {
+            const auto* id = registry.try_get<ECS::Components::Identity>(e);
+            s.is_selected = kind != nullptr && id != nullptr && id->unit_id == kind->unit_id;
+            break;
+        }
+        case GroupPick::Only:
+            s.is_selected = e == picked;
+            break;
+        }
+    }
+    Audio::Voices::Selected(registry, Core::LocalPlayer());
 }
 
 void InputManager::GivePendingOrder(ECS::Simulation& sim, float x, float y) {
@@ -1612,23 +1657,9 @@ void InputManager::ProcessEvent(const SDL_Event& event, ECS::Simulation& sim, Re
                     const SDL_Rect& r = cards[i].rect;
                     if (px < r.x || px >= r.x + r.w || py < r.y || py >= r.y + r.h) continue;
                     const SDL_Keymod mods = SDL_GetModState();
-                    const entt::entity picked = cards[i].unit;
-                    const auto* kind = registry.try_get<ECS::Components::Identity>(picked);
-                    auto sel = registry.view<ECS::Components::Selectable>();
-                    for (auto e : sel) {
-                        auto& s = sel.get<ECS::Components::Selectable>(e);
-                        if (!s.is_selected) continue;
-                        if (mods & KMOD_SHIFT) {
-                            if (e == picked) s.is_selected = false;
-                        } else if (mods & KMOD_CTRL) {
-                            const auto* id = registry.try_get<ECS::Components::Identity>(e);
-                            s.is_selected = kind != nullptr && id != nullptr &&
-                                            id->unit_id == kind->unit_id;
-                        } else {
-                            s.is_selected = e == picked;
-                        }
-                    }
-                    Audio::Voices::Selected(registry, Core::LocalPlayer());
+                    PickFromGroup(sim, cards[i].unit,
+                                  (mods & KMOD_SHIFT) ? GroupPick::Leave
+                                  : (mods & KMOD_CTRL) ? GroupPick::Kind : GroupPick::Only);
                     return;
                 }
             }

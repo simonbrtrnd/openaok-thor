@@ -105,6 +105,10 @@ private:
     void MinimapJump(Rendering::Renderer& renderer, ECS::Simulation& sim, int mx, int my);
     // Centre the camera on a world point at once, as a jump on the minimap does.
     void CentreCamera(Rendering::Renderer& renderer, float gx, float gy);
+    // A card of the selected group picked: the selection narrowed to its unit,
+    // that unit taken out, or the selection narrowed to every unit of its kind.
+    enum class GroupPick { Only, Leave, Kind };
+    void PickFromGroup(ECS::Simulation& sim, entt::entity picked, GroupPick how);
 
     // The finger on the second screen: what it went down on, when, whether it
     // is scrubbing the mini-map, and whether it has been held on a button long

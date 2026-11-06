@@ -56,10 +56,12 @@
 #include "hal/Window.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -2738,8 +2740,7 @@ void UIRenderer::DrawHelpText(ECS::Simulation& sim, SDL_Renderer* sdl_r, int win
     if (const Command* hovered = HoveredCommand(commands, n, mx, my)) {
         text = CommandHelp(sim, *hovered);
     } else if (const int bar = buttons ? BarButtonAt(top.w, tx, ty) : -1; bar >= 0) {
-        static const int kBarHelp[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
-        text = Core::Strings::Get(kBarHelp[bar]);
+        text = Core::Strings::Get(kBarButtonHelp[bar]);
     } else if (const int mm = buttons ? MinimapButtonAt(panel.w, mx, my) : -1; mm >= 0) {
         if (const int help = MinimapButtonHelp(hud, mm); help >= 0) text = Core::Strings::Get(help);
     } else if (hud.world_hint >= 0) {
@@ -2988,8 +2989,6 @@ constexpr SecondTileGroup kSecondMinimapTiles = {{808, 819, 416, 245}, 4, 2};
 constexpr int kSecondBarArtScale = 5;
 constexpr int kSecondMinimapArtScale = 3;
 using SecondKind = UIRenderer::SecondScreenTarget::Kind;
-// The help strings of the top bar's buttons, in their order.
-constexpr int kBarHelpString[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
 
 // The 1024x768 interface, drawn for the second screen to take its parts from.
 SDL_Texture* g_second_hud = nullptr;
@@ -3059,15 +3058,33 @@ SDL_Rect SecondTargetRect(const UIRenderer::SecondScreenTarget& target) {
 
 // `font` at `percent` of its size, or a quarter less each time down to its
 // own size, until every one of `texts` is at most `width` wide: one size for
-// all of them, so the size does not change with which is shown.
+// all of them, so the size does not change with which is shown. The answers
+// are kept: the few sets of texts asked about seldom change.
 int FittingFont(int font, int percent, int width, std::initializer_list<std::string_view> texts) {
+    size_t key = std::hash<int>{}(font * 1000003 + percent * 1009 + width);
+    for (std::string_view text : texts) key = key * 31 + std::hash<std::string_view>{}(text);
+    struct Known {
+        size_t key = 0;
+        int font = -1;
+    };
+    static std::array<Known, 8> known;
+    static size_t next = 0;
+    for (const Known& k : known) {
+        if (k.font >= 0 && k.key == key) return k.font;
+    }
+    int chosen = font;
     for (; percent > 100; percent -= 25) {
         const int scaled = Text::Scaled(font, percent);
         bool fits = true;
         for (std::string_view text : texts) fits = fits && Text::Width(scaled, text) <= width;
-        if (fits) return scaled;
+        if (fits) {
+            chosen = scaled;
+            break;
+        }
     }
-    return font;
+    known[next] = Known{key, chosen};
+    next = (next + 1) % known.size();
+    return chosen;
 }
 
 // A frame of an interface sheet `scale` times its size, centred in `r` and cut
@@ -3092,7 +3109,7 @@ std::string SecondHelpText(ECS::Simulation& sim, const UIRenderer::SecondScreenT
             ? UIRenderer::CommandHelp(sim, command) : std::string{};
     }
     case SecondKind::BarButton:
-        return Core::Strings::Get(kBarHelpString[target.index]);
+        return Core::Strings::Get(kBarButtonHelp[target.index]);
     case SecondKind::MinimapButton: {
         const int help = MinimapButtonHelp(HudState(), target.index);
         return help >= 0 ? Core::Strings::Get(help) : std::string{};
@@ -3126,27 +3143,37 @@ void DrawSecondHelp(SDL_Renderer* sdl_r, const std::string& text) {
     }
 }
 
-// A tile's dark ground and its border, gold while the button is on.
-void SecondTileBox(SDL_Renderer* sdl_r, const SDL_Rect& r, bool lit) {
-    Fill(sdl_r, r.x, r.y, r.w, r.h, SDL_Color{0, 0, 0, 115});
-    if (lit) {
-        SDL_SetRenderDrawColor(sdl_r, 236, 196, 92, 255);
-    } else {
-        SDL_SetRenderDrawColor(sdl_r, 140, 126, 92, 255);
-    }
-    for (int i = 0; i < (lit ? 4 : 2); ++i) {
+constexpr SDL_Color kSecondGold = {236, 196, 92, 255};
+
+// A border `width` pixels thick just inside `r`.
+void DrawEdge(SDL_Renderer* sdl_r, const SDL_Rect& r, SDL_Color colour, int width) {
+    SDL_SetRenderDrawColor(sdl_r, colour.r, colour.g, colour.b, colour.a);
+    for (int i = 0; i < width; ++i) {
         const SDL_Rect edge = {r.x + i, r.y + i, r.w - 2 * i, r.h - 2 * i};
         SDL_RenderDrawRect(sdl_r, &edge);
     }
 }
 
-// The 1024x768 frame's commands, their layout looked up for that frame.
-int SecondCommands(ECS::Simulation& sim, UIRenderer::Command* out) {
+// A tile's dark ground and its border, gold while the button is on.
+void SecondTileBox(SDL_Renderer* sdl_r, const SDL_Rect& r, bool lit) {
+    Fill(sdl_r, r.x, r.y, r.w, r.h, SDL_Color{0, 0, 0, 115});
+    DrawEdge(sdl_r, r, lit ? kSecondGold : SDL_Color{140, 126, 92, 255}, lit ? 4 : 2);
+}
+
+// What `build` finds with the 1024x768 frame's layout set, the real one's
+// put back after: the second screen's parts are the parts of that frame.
+template <typename Build>
+int InHudFrame(Build build) {
     const Frame frame = CurrentFrame();
     SetFrame(1024, 768);
-    const int n = UIRenderer::BuildCommands(sim, 1024, 768, out, UIRenderer::kCommandSlots);
+    const int n = build(1024, 768);
     SetFrame(frame.w, frame.h);
     return n;
+}
+
+// The 1024x768 frame's commands.
+int SecondCommands(ECS::Simulation& sim, UIRenderer::Command* out) {
+    return InHudFrame([&](int w, int h) { return UIRenderer::BuildCommands(sim, w, h, out, UIRenderer::kCommandSlots); });
 }
 
 SDL_FRect Mapped(const SDL_FRect& r, const SDL_Rect& from, const SDL_Rect& to) {
@@ -3358,22 +3385,12 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
     const SDL_Rect pressed = SecondTargetRect(g_second_finger.on);
     if (pressed.w > 0) {
         Fill(sdl_r, pressed.x, pressed.y, pressed.w, pressed.h, SDL_Color{0, 0, 0, 100});
-        SDL_SetRenderDrawColor(sdl_r, 236, 196, 92, 255);
-        for (int i = 0; i < 4; ++i) {
-            const SDL_Rect edge = {pressed.x + i, pressed.y + i, pressed.w - 2 * i, pressed.h - 2 * i};
-            SDL_RenderDrawRect(sdl_r, &edge);
-        }
+        DrawEdge(sdl_r, pressed, kSecondGold, 4);
     }
     // A button that waits to be confirmed: edged in bright yellow, its help in
     // place of the card until the finger shows another's.
     const SDL_Rect armed = SecondTargetRect(g_second_finger.armed);
-    if (armed.w > 0) {
-        SDL_SetRenderDrawColor(sdl_r, 255, 255, 0, 255);
-        for (int i = 0; i < 4; ++i) {
-            const SDL_Rect edge = {armed.x + i, armed.y + i, armed.w - 2 * i, armed.h - 2 * i};
-            SDL_RenderDrawRect(sdl_r, &edge);
-        }
-    }
+    if (armed.w > 0) DrawEdge(sdl_r, armed, SDL_Color{255, 255, 0, 255}, 4);
     const SecondScreenTarget& explained = g_second_finger.help ? g_second_finger.on : g_second_finger.armed;
     if (const std::string help = SecondHelpText(sim, explained); !help.empty()) DrawSecondHelp(sdl_r, help);
 }
@@ -3422,10 +3439,7 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
 
 bool UIRenderer::SecondScreenGroupCard(ECS::Simulation& sim, int index, entt::entity& out) {
     SelectionCard cards[kMaxSelectionCards];
-    const Frame frame = CurrentFrame();
-    SetFrame(1024, 768);
-    const int n = BuildSelectionCards(sim, 1024, 768, cards, kMaxSelectionCards);
-    SetFrame(frame.w, frame.h);
+    const int n = InHudFrame([&](int w, int h) { return BuildSelectionCards(sim, w, h, cards, kMaxSelectionCards); });
     if (index < 0 || index >= n || !sim.GetRegistry().valid(cards[index].unit)) return false;
     out = cards[index].unit;
     return true;
@@ -3433,10 +3447,7 @@ bool UIRenderer::SecondScreenGroupCard(ECS::Simulation& sim, int index, entt::en
 
 bool UIRenderer::SecondScreenQueueSlot(ECS::Simulation& sim, int index, QueueSlot& out) {
     QueueSlot slots[kMaxQueueSlots];
-    const Frame frame = CurrentFrame();
-    SetFrame(1024, 768);
-    const int n = BuildQueueSlots(sim, 1024, 768, slots, kMaxQueueSlots);
-    SetFrame(frame.w, frame.h);
+    const int n = InHudFrame([&](int w, int h) { return BuildQueueSlots(sim, w, h, slots, kMaxQueueSlots); });
     if (index < 0 || index >= n) return false;
     out = slots[index];
     return true;

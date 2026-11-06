@@ -86,6 +86,8 @@ enum BarButton : int {
 };
 constexpr uint32_t kBarButtonSlp = 50726;
 constexpr int kBarButtonFrame[kBarButtonCount] = {8, 4, 2, 6, 0};
+// Their help, by LANGUAGE.DLL string.
+constexpr int kBarButtonHelp[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
 // The objectives button while there is news in them, flashing.
 constexpr int kObjectivesLitFrame = 10;
 

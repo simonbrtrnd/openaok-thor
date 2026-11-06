@@ -189,21 +189,61 @@ void InputManager::HandleSecondScreen(ECS::Simulation& sim, Rendering::Renderer&
     // button has none.
     const bool helps = second_pressed.kind == Target::Kind::Command ||
                        second_pressed.kind == Target::Kind::BarButton ||
-                       second_pressed.kind == Target::Kind::MinimapButton;
+                       second_pressed.kind == Target::Kind::MinimapButton ||
+                       second_pressed.kind == Target::Kind::Age;
     const bool on_button = helps || second_pressed.kind == Target::Kind::QueueSlot;
     if (helps && !second_help && SDL_GetTicks() - second_down_ms >= kSecondHelpHoldMs) {
         second_help = true;
         HAL::Pad::Rumble();
     }
     Rendering::UIRenderer::SetSecondScreenFinger(on_button ? second_pressed : Target{}, second_help);
+    if (second_armed.kind != Target::Kind::None && (!accept || SDL_GetTicks() - second_armed_ms > kSecondConfirmMs)) {
+        second_armed = Target{};
+        HAL::SecondScreen::Invalidate();
+    }
+    Rendering::UIRenderer::SetSecondScreenArmed(second_armed);
     if (!touches.empty() || second_help != had_help) HAL::SecondScreen::Invalidate();
+}
+
+bool InputManager::SecondScreenAsksTwice(ECS::Simulation& sim,
+                                         const Rendering::UIRenderer::SecondScreenTarget& target) {
+    using Kind = Rendering::UIRenderer::SecondScreenTarget::Kind;
+    if (target.kind == Kind::Age) return true;
+    Rendering::UIRenderer::Command cmd;
+    return target.kind == Kind::Command && Rendering::UIRenderer::SecondScreenCommand(sim, target.index, cmd) &&
+           cmd.kind == Rendering::UIRenderer::CommandKind::Delete;
 }
 
 void InputManager::PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer,
                                      const Rendering::UIRenderer::SecondScreenTarget& target,
                                      int x, int y) {
     using Kind = Rendering::UIRenderer::SecondScreenTarget::Kind;
+    // The first touch on a button that asks twice only readies it.
+    if (SecondScreenAsksTwice(sim, target) && !(target == second_armed)) {
+        second_armed = target;
+        second_armed_ms = SDL_GetTicks();
+        HAL::Pad::Rumble();
+        HAL::SecondScreen::Invalidate();
+        return;
+    }
+    second_armed = {};
     switch (target.kind) {
+    case Kind::Age: {
+        // The Town Center selected and looked at, and its button for the next
+        // age pressed, as the player would.
+        Rendering::UIRenderer::Command age;
+        if (!Rendering::UIRenderer::SecondScreenAgeCommand(sim, age)) break;
+        GoToBuilding(sim, renderer, "Town Center");
+        Rendering::UIRenderer::Command cmd;
+        for (int slot = 1; slot <= Rendering::UIRenderer::kCommandSlots; ++slot) {
+            if (Rendering::UIRenderer::SecondScreenCommand(sim, slot, cmd) &&
+                cmd.kind == Rendering::UIRenderer::CommandKind::Research && cmd.tech_id == age.tech_id) {
+                RunCommand(sim, cmd, 1);
+                break;
+            }
+        }
+        break;
+    }
     case Kind::Command: {
         Rendering::UIRenderer::Command cmd;
         if (Rendering::UIRenderer::SecondScreenCommand(sim, target.index, cmd)) {

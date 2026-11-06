@@ -214,10 +214,10 @@ public:
 
     // What a point of the second screen (DrawSecondScreen) is on: a command
     // button, by its slot from 1 to 15; a top bar or mini-map button, by its
-    // number (rendering/HudLayout.h); the mini-map; or a button of the
-    // selected building's queue, by its place among them from 0.
+    // number (rendering/HudLayout.h); the mini-map; a button of the selected
+    // building's queue, by its place among them from 0; or the age.
     struct SecondScreenTarget {
-        enum class Kind { None, Command, BarButton, MinimapButton, Minimap, QueueSlot };
+        enum class Kind { None, Command, BarButton, MinimapButton, Minimap, QueueSlot, Age };
         Kind kind = Kind::None;
         int index = -1;
         bool operator==(const SecondScreenTarget&) const = default;
@@ -227,6 +227,12 @@ public:
     // drawn pressed, and whether it has stayed there long enough for that
     // button's help to show in place of the card.
     static void SetSecondScreenFinger(const SecondScreenTarget& on, bool help);
+    // The button that waits for a second touch to confirm it, drawn so with
+    // its help on the card; None for none.
+    static void SetSecondScreenArmed(const SecondScreenTarget& armed);
+    // The research of the player's next age, as its Town Center's button
+    // would have it; false in the last age.
+    static bool SecondScreenAgeCommand(ECS::Simulation& sim, Command& out);
     // The command in a slot of the second screen's grid; false when it is empty.
     static bool SecondScreenCommand(ECS::Simulation& sim, int slot, Command& out);
     // The map tile under a point of the second screen's mini-map; false off

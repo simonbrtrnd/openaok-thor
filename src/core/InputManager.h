@@ -114,6 +114,12 @@ private:
     Uint32 second_down_ms = 0;
     bool second_minimap_drag = false;
     bool second_help = false;
+    // A button whose press costs dear -- the next age, Delete -- waits for a
+    // second touch within kSecondConfirmMs, its help shown meanwhile.
+    static constexpr Uint32 kSecondConfirmMs = 3000;
+    Rendering::UIRenderer::SecondScreenTarget second_armed;
+    Uint32 second_armed_ms = 0;
+    bool SecondScreenAsksTwice(ECS::Simulation& sim, const Rendering::UIRenderer::SecondScreenTarget& target);
     // A finger lifted where it went down on the second screen.
     void PressSecondScreen(ECS::Simulation& sim, Rendering::Renderer& renderer,
                            const Rendering::UIRenderer::SecondScreenTarget& target, int x, int y);

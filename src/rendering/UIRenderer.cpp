@@ -2937,7 +2937,10 @@ constexpr int kSecondGap = 16;
 constexpr SDL_Rect kArtReadout = {0, 0, 392, 25};
 constexpr SDL_Rect kSecondReadout = {16, 16, 1019, 65};
 constexpr int kSecondReadoutPercent = 260;
-constexpr int kSecondAgeRight = 1224;
+// The age, right of the readout, in a tile of its own: touched, it advances
+// to the next age.
+constexpr SDL_Rect kSecondAge = {1051, 16, 173, 65};
+constexpr int kSecondAgeInset = 12;
 constexpr SDL_Rect kArtParchment = {289, 616, 388, 152};
 constexpr SDL_Rect kSecondCard = {16, 213, 1208, 363};
 constexpr SDL_Rect kArtMinimap = {690, 600, 322, 163};
@@ -2991,10 +2994,12 @@ constexpr int kBarHelpString[kBarButtonCount] = {4945, 41101, 4913, 4914, 4915};
 // The 1024x768 interface, drawn for the second screen to take its parts from.
 SDL_Texture* g_second_hud = nullptr;
 
-// The finger on the second screen, as input last set it.
+// The finger on the second screen, as input last set it, and the button that
+// waits for a second touch to confirm.
 struct SecondFinger {
     UIRenderer::SecondScreenTarget on;
     bool help = false;
+    UIRenderer::SecondScreenTarget armed;
 };
 SecondFinger g_second_finger;
 // A button's help in place of the card: its text a Georgia 9 two and a half
@@ -3044,6 +3049,7 @@ SDL_Rect SecondTargetRect(const UIRenderer::SecondScreenTarget& target) {
     case SecondKind::BarButton: return SecondTile(kSecondBarTiles, target.index);
     case SecondKind::MinimapButton: return SecondTile(kSecondMinimapTiles, target.index);
     case SecondKind::QueueSlot: return SecondQueueRect(target.index, g_second_queue_count);
+    case SecondKind::Age: return kSecondAge;
     default: return SDL_Rect{0, 0, 0, 0};
     }
 }
@@ -3087,6 +3093,10 @@ std::string SecondHelpText(ECS::Simulation& sim, const UIRenderer::SecondScreenT
     case SecondKind::MinimapButton: {
         const int help = MinimapButtonHelp(HudState(), target.index);
         return help >= 0 ? Core::Strings::Get(help) : std::string{};
+    }
+    case SecondKind::Age: {
+        UIRenderer::Command age;
+        return UIRenderer::SecondScreenAgeCommand(sim, age) ? UIRenderer::CommandHelp(sim, age) : std::string{};
     }
     default:
         return std::string{};
@@ -3168,14 +3178,14 @@ void DrawSecondReadout(SDL_Renderer* sdl_r, ECS::Simulation& sim, const HudLayou
     }
 
     auto& registry = sim.GetRegistry();
-    const int left = kSecondReadout.x + kSecondReadout.w + kSecondGap;
-    const int font = FittingFont(Text::kGeorgia9B, kSecondTextPercent, kSecondAgeRight - left,
+    SecondTileBox(sdl_r, kSecondAge, false);
+    const int font = FittingFont(Text::kGeorgia9B, kSecondTextPercent, kSecondAge.w - 2 * kSecondAgeInset,
                                  {AgeLabel(registry, 0), AgeLabel(registry, 1), AgeLabel(registry, 2),
                                   AgeLabel(registry, 3)});
     const std::string& age = AgeLabel(registry, ECS::Techs::Age(registry, LocalViewer()));
     if (age.empty()) return;
-    Text::DrawShadowed(sdl_r, font, kSecondAgeRight - Text::Width(font, age),
-                       kSecondReadout.y + (kSecondReadout.h - Text::Height(font)) / 2, age, kWhite, kBlack);
+    Text::DrawShadowed(sdl_r, font, kSecondAge.x + (kSecondAge.w - Text::Width(font, age)) / 2,
+                       kSecondAge.y + (kSecondAge.h - Text::Height(font)) / 2, age, kWhite, kBlack);
 }
 
 // The selected object's card, at the second screen's sizes.
@@ -3346,11 +3356,31 @@ void UIRenderer::DrawSecondScreen(ECS::Simulation& sim, Renderer& renderer, SDL_
             SDL_RenderDrawRect(sdl_r, &edge);
         }
     }
-    if (g_second_finger.help) {
-        if (const std::string help = SecondHelpText(sim, g_second_finger.on); !help.empty()) {
-            DrawSecondHelp(sdl_r, help);
+    // A button that waits to be confirmed: edged in bright yellow, its help in
+    // place of the card until the finger shows another's.
+    const SDL_Rect armed = SecondTargetRect(g_second_finger.armed);
+    if (armed.w > 0) {
+        SDL_SetRenderDrawColor(sdl_r, 255, 255, 0, 255);
+        for (int i = 0; i < 4; ++i) {
+            const SDL_Rect edge = {armed.x + i, armed.y + i, armed.w - 2 * i, armed.h - 2 * i};
+            SDL_RenderDrawRect(sdl_r, &edge);
         }
     }
+    const SecondScreenTarget& explained = g_second_finger.help ? g_second_finger.on : g_second_finger.armed;
+    if (const std::string help = SecondHelpText(sim, explained); !help.empty()) DrawSecondHelp(sdl_r, help);
+}
+
+void UIRenderer::SetSecondScreenArmed(const SecondScreenTarget& armed) { g_second_finger.armed = armed; }
+
+bool UIRenderer::SecondScreenAgeCommand(ECS::Simulation& sim, Command& out) {
+    auto& registry = sim.GetRegistry();
+    const int age = ECS::Techs::Age(registry, LocalViewer());
+    const int tech = age < 3 ? ECS::Techs::AgeTech(registry, LocalViewer(), age + 1) : -1;
+    if (tech < 0) return false;
+    out = Command{};
+    out.kind = CommandKind::Research;
+    out.tech_id = tech;
+    return true;
 }
 
 void UIRenderer::SetSecondScreenFinger(const SecondScreenTarget& on, bool help) {
@@ -3373,6 +3403,7 @@ UIRenderer::SecondScreenTarget UIRenderer::SecondScreenTargetAt(int x, int y) {
     for (int b = 0; b < kMinimapButtonCount; ++b) {
         if (Inside(SecondTile(kSecondMinimapTiles, b), x, y)) return SecondScreenTarget{Kind::MinimapButton, b};
     }
+    if (Inside(kSecondAge, x, y)) return SecondScreenTarget{Kind::Age, -1};
     if (Inside(kSecondMinimap, x, y)) return SecondScreenTarget{Kind::Minimap, -1};
     return SecondScreenTarget{};
 }

@@ -1,7 +1,7 @@
 > [!IMPORTANT]
 > Just so you know, this whole fork was built with Claude, Anthropic's AI
-> assistant, in Claude Code. I picked what to build and tried every change on my
-> Thor.
+> assistant, in Claude Code. I decided what to build and tried every change on
+> my Thor.
 
 # AoK Thor
 

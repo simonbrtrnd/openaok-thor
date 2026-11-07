@@ -1,4 +1,4 @@
-> [!WARNING]
+> [!IMPORTANT]
 > This fork was made entirely with Claude, Anthropic's AI assistant, in Claude
 > Code. I chose what to build and tested each change on my Thor.
 

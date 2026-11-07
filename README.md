@@ -4,7 +4,7 @@ Age of Empires II: The Age of Kings (1999) on the AYN Thor, using both screens.
 It's a fork of [OpenAoK](https://github.com/Zaydme/openaok), an open-source
 engine that runs the original game from your own CD.
 
-> [!NOTE]
+> [!WARNING]
 > This fork was made entirely with Claude, Anthropic's AI assistant, in Claude
 > Code. I chose what to build and tested each change on my Thor.
 
